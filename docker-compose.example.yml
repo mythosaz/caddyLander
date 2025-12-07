@@ -3,6 +3,8 @@ version: "3.9"
 services:
   caddylander:
     image: mythosaz/caddylander:main
+    environment:
+      - ADMIN_PASSWORD=caddyLander
     container_name: caddylander
     restart: unless-stopped
 

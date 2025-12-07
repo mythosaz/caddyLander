@@ -7,12 +7,18 @@
     body { font-family: system-ui; background:#222; color:#eee; padding:2rem; }
     textarea { width:100%; height:300px; background:#111; color:#eee; }
     button { padding:0.5rem 1.2rem; margin-top:1rem; }
+    select { margin-top: 0.5rem; }
     .panel { margin-bottom: 2rem; }
     .status { margin-top: 0.5rem; font-weight: bold; }
+    .note { background: #333; padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem; }
   </style>
 </head>
 <body>
   <h1>Admin</h1>
+
+  <div class="note" id="default-password-note">
+    Default admin password is <code>caddyLander</code>. Set the <code>ADMIN_PASSWORD</code> environment variable to change it.
+  </div>
 
   <div class="panel">
     <button onclick="download()">Download</button>
@@ -20,6 +26,18 @@
     <h3>Edit JSON</h3>
     <textarea id="editor"></textarea><br>
     <button onclick="upload()">Upload</button>
+    <div id="content-status" class="status"></div>
+  </div>
+
+  <div class="panel">
+    <h3>Content Backups</h3>
+    <div>
+      <label for="backup-select">Select version:</label><br>
+      <select id="backup-select"></select>
+    </div>
+    <button onclick="loadBackupToEditor()">Load into editor</button>
+    <button onclick="restoreBackup()">Restore</button>
+    <div class="status">Last 10 backups are retained.</div>
   </div>
 
   <div class="panel">
@@ -27,6 +45,17 @@
     <textarea id="caddyfile-editor"></textarea><br>
     <button onclick="saveCaddyfile()">Save Caddyfile</button>
     <div id="caddyfile-status" class="status"></div>
+  </div>
+
+  <div class="panel">
+    <h3>Caddyfile Backups</h3>
+    <div>
+      <label for="caddyfile-backup-select">Select version:</label><br>
+      <select id="caddyfile-backup-select"></select>
+    </div>
+    <button onclick="loadCaddyfileBackupToEditor()">Load into editor</button>
+    <button onclick="restoreCaddyfileBackup()">Restore</button>
+    <div class="status">Last 10 backups are retained.</div>
   </div>
 
   <script>
@@ -40,6 +69,19 @@
       fetch("/admin/caddyfile")
         .then(r => r.text())
         .then(t => { document.getElementById("caddyfile-editor").value = t; });
+    }
+
+    function loadAdminInfo() {
+      fetch("/api/admin/info")
+        .then(r => r.json())
+        .then(info => {
+          if (!info.defaultPassword) {
+            const note = document.getElementById("default-password-note");
+            if (note) {
+              note.style.display = "none";
+            }
+          }
+        });
     }
 
     function download() {
@@ -56,11 +98,99 @@
 
     function upload() {
       const text = editor.value;
+      const status = document.getElementById("content-status");
+      status.textContent = "";
       fetch("/api/upload", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: "content=" + encodeURIComponent(text)
-      }).then(_ => alert("Updated"));
+      })
+        .then(r => {
+          if (!r.ok) throw new Error("Failed");
+          return r.json();
+        })
+        .then(_ => {
+          status.textContent = "Saved and backed up previous version.";
+          refreshBackups();
+        })
+        .catch(_ => {
+          status.textContent = "Error saving content.";
+        });
+    }
+
+    function refreshBackups() {
+      const select = document.getElementById("backup-select");
+      select.innerHTML = "";
+
+      fetch("/api/admin/content/backups")
+        .then(r => r.json())
+        .then(({ backups }) => {
+          backups.forEach(entry => {
+            const option = document.createElement("option");
+            const date = new Date(entry.timestamp * 1000);
+            option.value = entry.name;
+            option.textContent = `${entry.name} (${date.toLocaleString()})`;
+            select.appendChild(option);
+          });
+        });
+    }
+
+    function refreshCaddyfileBackups() {
+      const select = document.getElementById("caddyfile-backup-select");
+      select.innerHTML = "";
+
+      fetch("/api/admin/caddyfile/backups")
+        .then(r => r.json())
+        .then(({ backups }) => {
+          backups.forEach(entry => {
+            const option = document.createElement("option");
+            const date = new Date(entry.timestamp * 1000);
+            option.value = entry.name;
+            option.textContent = `${entry.name} (${date.toLocaleString()})`;
+            select.appendChild(option);
+          });
+        });
+    }
+
+    function loadBackupToEditor() {
+      const select = document.getElementById("backup-select");
+      const name = select.value;
+      if (!name) return;
+
+      fetch(`/api/admin/content/backup?name=${encodeURIComponent(name)}`)
+        .then(r => r.json())
+        .then(data => {
+          editor.value = JSON.stringify(data, null, 2);
+        });
+    }
+
+    function restoreBackup() {
+      const select = document.getElementById("backup-select");
+      const name = select.value;
+      const status = document.getElementById("content-status");
+      if (!name) {
+        status.textContent = "Select a backup first.";
+        return;
+      }
+
+      status.textContent = "";
+      fetch("/api/admin/content/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name })
+      })
+        .then(r => {
+          if (!r.ok) throw new Error("Failed");
+          return r.json();
+        })
+        .then(_ => {
+          status.textContent = "Backup restored and previous version saved.";
+          loadJson();
+          refreshBackups();
+        })
+        .catch(_ => {
+          status.textContent = "Error restoring backup.";
+        });
     }
 
     function saveCaddyfile() {
@@ -78,14 +208,59 @@
         })
         .then(_ => {
           status.textContent = "Restart Caddy Required.";
+          refreshCaddyfileBackups();
         })
         .catch(_ => {
           status.textContent = "Error saving Caddyfile.";
         });
     }
 
+    function loadCaddyfileBackupToEditor() {
+      const select = document.getElementById("caddyfile-backup-select");
+      const name = select.value;
+      if (!name) return;
+
+      fetch(`/api/admin/caddyfile/backup?name=${encodeURIComponent(name)}`)
+        .then(r => r.text())
+        .then(text => {
+          document.getElementById("caddyfile-editor").value = text;
+        });
+    }
+
+    function restoreCaddyfileBackup() {
+      const select = document.getElementById("caddyfile-backup-select");
+      const name = select.value;
+      const status = document.getElementById("caddyfile-status");
+      if (!name) {
+        status.textContent = "Select a backup first.";
+        return;
+      }
+
+      status.textContent = "";
+      fetch("/api/admin/caddyfile/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name })
+      })
+        .then(r => {
+          if (!r.ok) throw new Error("Failed");
+          return r.json();
+        })
+        .then(_ => {
+          status.textContent = "Backup restored and previous version saved. Restart Caddy Required.";
+          loadCaddyfile();
+          refreshCaddyfileBackups();
+        })
+        .catch(_ => {
+          status.textContent = "Error restoring backup.";
+        });
+    }
+
+    loadAdminInfo();
     loadJson();
     loadCaddyfile();
+    refreshBackups();
+    refreshCaddyfileBackups();
   </script>
 </body>
 </html>
