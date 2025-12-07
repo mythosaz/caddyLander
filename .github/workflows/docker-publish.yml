@@ -1,13 +1,17 @@
-name: Publish Docker image (next)
+name: Publish Docker image (unified)
 
 on:
   push:
     branches:
+      - main
       - next
+    tags:
+      - "v*"
 
 jobs:
-  build-and-push:
+  build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,14 +28,49 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push (next only)
+      #
+      # TAG COMPUTATION — no heredocs, explicit, safe, works everywhere
+      #
+      - id: meta
+        name: Compute tags
+        shell: bash
+        run: |
+          echo "Generating tags for ref: $GITHUB_REF_TYPE / $GITHUB_REF_NAME"
+
+          TAGS=""
+
+          if [[ "$GITHUB_REF_TYPE" == "branch" && "$GITHUB_REF_NAME" == "next" ]]; then
+            TAGS+="docker.io/${{ secrets.DOCKERHUB_USERNAME }}/caddylander:next"$'\n'
+            TAGS+="docker.io/${{ secrets.DOCKERHUB_USERNAME }}/caddylander:${GITHUB_REF_NAME}"$'\n'
+            TAGS+="docker.io/mythosaz/caddylander:next"$'\n'
+            TAGS+="docker.io/mythosaz/caddylander:${GITHUB_REF_NAME}"$'\n'
+          fi
+
+          if [[ "$GITHUB_REF_TYPE" == "branch" && "$GITHUB_REF_NAME" == "main" ]]; then
+            TAGS+="docker.io/${{ secrets.DOCKERHUB_USERNAME }}/caddylander:main"$'\n'
+            TAGS+="docker.io/${{ secrets.DOCKERHUB_USERNAME }}/caddylander:latest"$'\n'
+            TAGS+="docker.io/mythosaz/caddylander:main"$'\n'
+            TAGS+="docker.io/mythosaz/caddylander:latest"$'\n'
+          fi
+
+          if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" =~ ^v.* ]]; then
+            TAGS+="docker.io/${{ secrets.DOCKERHUB_USERNAME }}/caddylander:${GITHUB_REF_NAME}"$'\n'
+            TAGS+="docker.io/${{ secrets.DOCKERHUB_USERNAME }}/caddylander:latest"$'\n'
+            TAGS+="docker.io/mythosaz/caddylander:${GITHUB_REF_NAME}"$'\n'
+            TAGS+="docker.io/mythosaz/caddylander:latest"$'\n'
+          fi
+
+          echo "tags<<EOF" >> $GITHUB_OUTPUT
+          echo "$TAGS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      #
+      # BUILD + PUSH using multi-line tag output
+      #
+      - name: Build and push image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: |
-            docker.io/${{ secrets.DOCKERHUB_USERNAME }}/caddylander:next
-            docker.io/${{ secrets.DOCKERHUB_USERNAME }}/caddylander:${{ github.ref_name }}
-            docker.io/mythosaz/caddylander:next
-            docker.io/mythosaz/caddylander:${{ github.ref_name }}
+          tags: ${{ steps.meta.outputs.tags }}
