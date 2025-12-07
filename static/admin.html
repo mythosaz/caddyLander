@@ -16,7 +16,7 @@
 <body>
   <h1>Admin</h1>
 
-  <div class="note">
+  <div class="note" id="default-password-note">
     Default admin password is <code>caddyLander</code>. Set the <code>ADMIN_PASSWORD</code> environment variable to change it.
   </div>
 
@@ -47,6 +47,17 @@
     <div id="caddyfile-status" class="status"></div>
   </div>
 
+  <div class="panel">
+    <h3>Caddyfile Backups</h3>
+    <div>
+      <label for="caddyfile-backup-select">Select version:</label><br>
+      <select id="caddyfile-backup-select"></select>
+    </div>
+    <button onclick="loadCaddyfileBackupToEditor()">Load into editor</button>
+    <button onclick="restoreCaddyfileBackup()">Restore</button>
+    <div class="status">Last 10 backups are retained.</div>
+  </div>
+
   <script>
     function loadJson() {
       fetch("/api/content")
@@ -58,6 +69,19 @@
       fetch("/admin/caddyfile")
         .then(r => r.text())
         .then(t => { document.getElementById("caddyfile-editor").value = t; });
+    }
+
+    function loadAdminInfo() {
+      fetch("/api/admin/info")
+        .then(r => r.json())
+        .then(info => {
+          if (!info.defaultPassword) {
+            const note = document.getElementById("default-password-note");
+            if (note) {
+              note.style.display = "none";
+            }
+          }
+        });
     }
 
     function download() {
@@ -99,6 +123,23 @@
       select.innerHTML = "";
 
       fetch("/api/admin/content/backups")
+        .then(r => r.json())
+        .then(({ backups }) => {
+          backups.forEach(entry => {
+            const option = document.createElement("option");
+            const date = new Date(entry.timestamp * 1000);
+            option.value = entry.name;
+            option.textContent = `${entry.name} (${date.toLocaleString()})`;
+            select.appendChild(option);
+          });
+        });
+    }
+
+    function refreshCaddyfileBackups() {
+      const select = document.getElementById("caddyfile-backup-select");
+      select.innerHTML = "";
+
+      fetch("/api/admin/caddyfile/backups")
         .then(r => r.json())
         .then(({ backups }) => {
           backups.forEach(entry => {
@@ -167,15 +208,59 @@
         })
         .then(_ => {
           status.textContent = "Restart Caddy Required.";
+          refreshCaddyfileBackups();
         })
         .catch(_ => {
           status.textContent = "Error saving Caddyfile.";
         });
     }
 
+    function loadCaddyfileBackupToEditor() {
+      const select = document.getElementById("caddyfile-backup-select");
+      const name = select.value;
+      if (!name) return;
+
+      fetch(`/api/admin/caddyfile/backup?name=${encodeURIComponent(name)}`)
+        .then(r => r.text())
+        .then(text => {
+          document.getElementById("caddyfile-editor").value = text;
+        });
+    }
+
+    function restoreCaddyfileBackup() {
+      const select = document.getElementById("caddyfile-backup-select");
+      const name = select.value;
+      const status = document.getElementById("caddyfile-status");
+      if (!name) {
+        status.textContent = "Select a backup first.";
+        return;
+      }
+
+      status.textContent = "";
+      fetch("/api/admin/caddyfile/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name })
+      })
+        .then(r => {
+          if (!r.ok) throw new Error("Failed");
+          return r.json();
+        })
+        .then(_ => {
+          status.textContent = "Backup restored and previous version saved. Restart Caddy Required.";
+          loadCaddyfile();
+          refreshCaddyfileBackups();
+        })
+        .catch(_ => {
+          status.textContent = "Error restoring backup.";
+        });
+    }
+
+    loadAdminInfo();
     loadJson();
     loadCaddyfile();
     refreshBackups();
+    refreshCaddyfileBackups();
   </script>
 </body>
 </html>

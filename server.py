@@ -44,6 +44,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not self._require_auth():
                 return
             return self._serve_file(STATIC_DIR / "admin.html", "text/html")
+        if parsed.path == "/api/admin/info":
+            if not self._require_auth():
+                return
+            return self._serve_admin_info()
         if parsed.path == "/api/content":
             return self._serve_file(RUNTIME_CONTENT, "application/json")
         if parsed.path == "/admin/caddyfile":
@@ -58,6 +62,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not self._require_auth():
                 return
             return self._serve_content_backup(parsed)
+        if parsed.path == "/api/admin/caddyfile/backups":
+            if not self._require_auth():
+                return
+            return self._serve_caddyfile_backups()
+        if parsed.path == "/api/admin/caddyfile/backup":
+            if not self._require_auth():
+                return
+            return self._serve_caddyfile_backup(parsed)
         if parsed.path.startswith("/static/"):
             target = STATIC_DIR / parsed.path.removeprefix("/static/")
             if target.is_file() and target.resolve().is_relative_to(STATIC_DIR.resolve()):
@@ -78,6 +90,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not self._require_auth():
                 return
             return self._handle_content_restore()
+        if parsed.path == "/api/admin/caddyfile/restore":
+            if not self._require_auth():
+                return
+            return self._handle_caddyfile_restore()
 
         self.send_error(404)
 
@@ -120,6 +136,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("WWW-Authenticate", 'Basic realm="caddyLander"')
         self.end_headers()
         return False
+
+    def _serve_admin_info(self):
+        info = {"defaultPassword": ADMIN_PASSWORD == DEFAULT_ADMIN_PASSWORD}
+        data = json.dumps(info).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
     def _serve_caddyfile(self):
         content = ""
@@ -170,26 +195,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
         raw_body = read_body(self)
         new_content = raw_body.decode("utf-8")
 
-        BACKUP_DIR.mkdir(parents=True, exist_ok=True)
         CADDYFILE_PATH.parent.mkdir(parents=True, exist_ok=True)
 
         previous_content = ""
         if CADDYFILE_PATH.exists():
             previous_content = CADDYFILE_PATH.read_text(encoding="utf-8")
 
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        backup_path = BACKUP_DIR / f"Caddyfile.old.{timestamp}"
-        backup_path.write_text(previous_content, encoding="utf-8")
+        if previous_content:
+            self._backup_caddyfile(previous_content)
 
         CADDYFILE_PATH.write_text(new_content, encoding="utf-8")
-
-        backups = sorted(
-            BACKUP_DIR.glob("Caddyfile.old.*"),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
-        )
-        for old_backup in backups[10:]:
-            old_backup.unlink(missing_ok=True)
 
         response = json.dumps({"status": "ok", "restart_required": True}).encode()
         self.send_response(200)
@@ -219,6 +234,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not candidate.is_relative_to(CONTENT_BACKUP_DIR.resolve()):
             return None
         if not candidate.name.startswith("content.json.old."):
+            return None
+        return candidate
+
+    def _resolve_caddy_backup(self, name: str) -> Path | None:
+        candidate = (BACKUP_DIR / name).resolve()
+        if not candidate.is_file():
+            return None
+        if not candidate.is_relative_to(BACKUP_DIR.resolve()):
+            return None
+        if not candidate.name.startswith("Caddyfile.old."):
             return None
         return candidate
 
@@ -303,6 +328,96 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+    def _backup_caddyfile(self, previous_content: str):
+        BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        backup_path = BACKUP_DIR / f"Caddyfile.old.{timestamp}"
+        backup_path.write_text(previous_content, encoding="utf-8")
+
+        backups = sorted(
+            BACKUP_DIR.glob("Caddyfile.old.*"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        for old_backup in backups[10:]:
+            old_backup.unlink(missing_ok=True)
+
+    def _serve_caddyfile_backups(self):
+        backups = [
+            {
+                "name": path.name,
+                "timestamp": path.stat().st_mtime,
+            }
+            for path in sorted(
+                BACKUP_DIR.glob("Caddyfile.old.*"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            )
+        ]
+
+        data = json.dumps({"backups": backups}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _serve_caddyfile_backup(self, parsed_url):
+        params = parse_qs(parsed_url.query)
+        name = params.get("name", [None])[0]
+        if not name:
+            self.send_error(400, "Missing backup name")
+            return
+
+        target = self._resolve_caddy_backup(name)
+        if target is None:
+            self.send_error(404, "Backup not found")
+            return
+
+        data = target.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _handle_caddyfile_restore(self):
+        raw_body = read_body(self)
+        try:
+            payload = json.loads(raw_body.decode("utf-8"))
+        except json.JSONDecodeError:
+            self.send_error(400, "Invalid JSON payload")
+            return
+
+        name = payload.get("name")
+        if not name:
+            self.send_error(400, "Missing backup name")
+            return
+
+        target = self._resolve_caddy_backup(name)
+        if target is None:
+            self.send_error(404, "Backup not found")
+            return
+
+        previous_content = ""
+        if CADDYFILE_PATH.exists():
+            previous_content = CADDYFILE_PATH.read_text(encoding="utf-8")
+
+        backup_text = target.read_text(encoding="utf-8")
+
+        if previous_content:
+            self._backup_caddyfile(previous_content)
+
+        CADDYFILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        CADDYFILE_PATH.write_text(backup_text, encoding="utf-8")
+
+        response = json.dumps({"status": "ok", "restart_required": True}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(response)))
+        self.end_headers()
+        self.wfile.write(response)
 
 
 if __name__ == "__main__":
