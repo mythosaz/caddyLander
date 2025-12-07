@@ -1,6 +1,7 @@
 import http.server
 import json
 import shutil
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -9,6 +10,9 @@ STATIC_DIR = APP_ROOT / "static"
 TEMPLATE_CONTENT = APP_ROOT / "content" / "content.json"
 RUNTIME_BASE = Path("/var/caddy")
 RUNTIME_CONTENT = RUNTIME_BASE / "content.json"
+CONFIG_BASE = Path("/config")
+CADDYFILE_PATH = CONFIG_BASE / "Caddyfile"
+BACKUP_DIR = CONFIG_BASE / "backup"
 
 
 def bootstrap_content() -> None:
@@ -34,6 +38,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._serve_file(STATIC_DIR / "admin.html", "text/html")
         if parsed.path == "/api/content":
             return self._serve_file(RUNTIME_CONTENT, "application/json")
+        if parsed.path == "/admin/caddyfile":
+            return self._serve_caddyfile()
         if parsed.path.startswith("/static/"):
             target = STATIC_DIR / parsed.path.removeprefix("/static/")
             if target.is_file() and target.resolve().is_relative_to(STATIC_DIR.resolve()):
@@ -42,10 +48,48 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path != "/api/upload":
+        if parsed.path == "/api/upload":
+            return self._handle_content_upload()
+        if parsed.path == "/admin/caddyfile":
+            return self._handle_caddyfile_update()
+
+        self.send_error(404)
+
+    def _serve_file(self, path: Path, content_type: str):
+        if not path.exists():
             self.send_error(404)
             return
+        data = path.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
+    def _guess_type(self, path: Path) -> str:
+        if path.suffix == ".html":
+            return "text/html"
+        if path.suffix == ".css":
+            return "text/css"
+        if path.suffix == ".js":
+            return "application/javascript"
+        return "application/octet-stream"
+
+    def _serve_caddyfile(self):
+        content = ""
+        if CADDYFILE_PATH.exists():
+            existing = CADDYFILE_PATH.read_text(encoding="utf-8")
+            if existing:
+                content = existing
+
+        data = content.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _handle_content_upload(self):
         raw_body = read_body(self)
         data = parse_qs(raw_body.decode())
         new_content = data.get("content", [None])[0]
@@ -69,25 +113,37 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(response)
 
-    def _serve_file(self, path: Path, content_type: str):
-        if not path.exists():
-            self.send_error(404)
-            return
-        data = path.read_bytes()
-        self.send_response(200)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
+    def _handle_caddyfile_update(self):
+        raw_body = read_body(self)
+        new_content = raw_body.decode("utf-8")
 
-    def _guess_type(self, path: Path) -> str:
-        if path.suffix == ".html":
-            return "text/html"
-        if path.suffix == ".css":
-            return "text/css"
-        if path.suffix == ".js":
-            return "application/javascript"
-        return "application/octet-stream"
+        BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+        CADDYFILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+        previous_content = ""
+        if CADDYFILE_PATH.exists():
+            previous_content = CADDYFILE_PATH.read_text(encoding="utf-8")
+
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        backup_path = BACKUP_DIR / f"Caddyfile.old.{timestamp}"
+        backup_path.write_text(previous_content, encoding="utf-8")
+
+        CADDYFILE_PATH.write_text(new_content, encoding="utf-8")
+
+        backups = sorted(
+            BACKUP_DIR.glob("Caddyfile.old.*"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        for old_backup in backups[10:]:
+            old_backup.unlink(missing_ok=True)
+
+        response = json.dumps({"status": "ok", "restart_required": True}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(response)))
+        self.end_headers()
+        self.wfile.write(response)
 
 
 if __name__ == "__main__":

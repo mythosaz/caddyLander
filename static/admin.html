@@ -7,22 +7,39 @@
     body { font-family: system-ui; background:#222; color:#eee; padding:2rem; }
     textarea { width:100%; height:300px; background:#111; color:#eee; }
     button { padding:0.5rem 1.2rem; margin-top:1rem; }
+    .panel { margin-bottom: 2rem; }
+    .status { margin-top: 0.5rem; font-weight: bold; }
   </style>
 </head>
 <body>
   <h1>Admin</h1>
 
-  <button onclick="download()">Download</button>
+  <div class="panel">
+    <button onclick="download()">Download</button>
 
-  <h3>Edit JSON</h3>
-  <textarea id="editor"></textarea><br>
-  <button onclick="upload()">Upload</button>
+    <h3>Edit JSON</h3>
+    <textarea id="editor"></textarea><br>
+    <button onclick="upload()">Upload</button>
+  </div>
+
+  <div class="panel">
+    <h3>Caddyfile Editor</h3>
+    <textarea id="caddyfile-editor"></textarea><br>
+    <button onclick="saveCaddyfile()">Save Caddyfile</button>
+    <div id="caddyfile-status" class="status"></div>
+  </div>
 
   <script>
-    function load() {
+    function loadJson() {
       fetch("/api/content")
         .then(r => r.json())
         .then(j => { editor.value = JSON.stringify(j, null, 2); });
+    }
+
+    function loadCaddyfile() {
+      fetch("/admin/caddyfile")
+        .then(r => r.text())
+        .then(t => { document.getElementById("caddyfile-editor").value = t; });
     }
 
     function download() {
@@ -46,7 +63,29 @@
       }).then(_ => alert("Updated"));
     }
 
-    load();
+    function saveCaddyfile() {
+      const text = document.getElementById("caddyfile-editor").value;
+      const status = document.getElementById("caddyfile-status");
+      status.textContent = "";
+
+      fetch("/admin/caddyfile", {
+        method: "POST",
+        body: text
+      })
+        .then(r => {
+          if (!r.ok) throw new Error("Failed");
+          return r.json();
+        })
+        .then(_ => {
+          status.textContent = "Restart Caddy Required.";
+        })
+        .catch(_ => {
+          status.textContent = "Error saving Caddyfile.";
+        });
+    }
+
+    loadJson();
+    loadCaddyfile();
   </script>
 </body>
 </html>
