@@ -2,6 +2,8 @@ name: Publish Docker image
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "*"
 
@@ -33,3 +35,4 @@ jobs:
           tags: |
             docker.io/${{ secrets.DOCKERHUB_USERNAME }}/caddylander:latest
             docker.io/${{ secrets.DOCKERHUB_USERNAME }}/caddylander:${{ github.ref_name }}
+            docker.io/mythosaz/caddylander:main

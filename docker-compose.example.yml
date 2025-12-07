@@ -2,17 +2,20 @@ version: "3.9"
 
 services:
   caddylander:
-    build: .
+    image: mythosaz/caddylander:main
     volumes:
-      - caddylander_data:/var/caddy
+      - caddy_var:/var/caddy
     # Optional local test exposure using the VETO mnemonic port
     # ports:
     #   - "8386:8080"   # VETO mnemonic test port
 
 volumes:
-  caddylander_data: {}
+  caddy_var: {}
 
 # Example Caddyfile block for wildcard routing:
 # *.example.com {
 #     reverse_proxy caddylander:8080
+#     # Mount the same volume to keep content.json in sync
+#     # volumes:
+#     #   - caddy_var:/var/caddy
 # }

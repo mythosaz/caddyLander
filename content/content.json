@@ -4,6 +4,21 @@
       "name": "Example Service",
       "url": "https://example.org",
       "desc": "Replace this entry with your own services"
+    },
+    {
+      "name": "caddyLander on GitHub",
+      "url": "https://github.com/mythosaz/caddyLander",
+      "desc": "Project source, docs, and issues"
+    },
+    {
+      "name": "Caddy Web Server",
+      "url": "https://github.com/caddyserver/caddy",
+      "desc": "The reverse-proxy and web server that fronts caddyLander"
+    },
+    {
+      "name": "Google",
+      "url": "https://www.google.com",
+      "desc": "A quick jump to search"
     }
   ]
 }
