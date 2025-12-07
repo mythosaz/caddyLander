@@ -1,12 +1,9 @@
-name: Publish Docker image
+name: Publish Docker image (next)
 
 on:
   push:
     branches:
-      - main
       - next
-    tags:
-      - "*"
 
 jobs:
   build-and-push:
@@ -27,15 +24,14 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push
+      - name: Build and push (next only)
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           platforms: linux/amd64,linux/arm64
           tags: |
-            docker.io/${{ secrets.DOCKERHUB_USERNAME }}/caddylander:latest
-            docker.io/${{ secrets.DOCKERHUB_USERNAME }}/caddylander:${{ github.ref_name }}
             docker.io/${{ secrets.DOCKERHUB_USERNAME }}/caddylander:next
-            docker.io/mythosaz/caddylander:${{ github.ref_name }}
+            docker.io/${{ secrets.DOCKERHUB_USERNAME }}/caddylander:${{ github.ref_name }}
             docker.io/mythosaz/caddylander:next
+            docker.io/mythosaz/caddylander:${{ github.ref_name }}
