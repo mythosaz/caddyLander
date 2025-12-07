@@ -3,19 +3,38 @@ version: "3.9"
 services:
   caddylander:
     image: mythosaz/caddylander:main
+    container_name: caddylander
+    restart: unless-stopped
+
+    # This container must be on the same network as your public-facing Caddy instance.
+    networks:
+      caddy-servers-network:
+        # Optional: pin the MAC address if using DHCP reservations
+        # mac_address: 02:42:ac:11:ac:ab
+
     volumes:
+      # Persistent editable landing-page data
       - caddy_var:/var/caddy
-    # Optional local test exposure using the VETO mnemonic port
-    # ports:
-    #   - "8386:8080"   # VETO mnemonic test port
+
+      # Shared Caddy configuration (for Caddyfile editing)
+      - caddy_config:/config
+
+    # Optional: expose local debug port
+    ports:
+      - "8386:8080"
 
 volumes:
-  caddy_var: {}
+  # Shared persistent landing-page state
+  caddy_var:
+    external: true
+    name: caddy_var
 
-# Example Caddyfile block for wildcard routing:
-# *.example.com {
-#     reverse_proxy caddylander:8080
-#     # Mount the same volume to keep content.json in sync
-#     # volumes:
-#     #   - caddy_var:/var/caddy
-# }
+  # Shared Caddyfile + autosave configuration directory
+  caddy_config:
+    external: true
+    name: caddy_config
+
+networks:
+  # Must be the same user-defined network your main Caddy reverse proxy uses
+  caddy-servers-network:
+    external: true
