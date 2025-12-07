@@ -1,65 +1,130 @@
 # caddyLander
 
-caddyLander is a tiny JSON-backed landing portal intended to sit behind Caddy as a wildcard catch-all. It serves a simple landing page plus a lightweight admin editor backed by a JSON file.
+**caddyLander** is a lightweight landing portal and **Caddyfile Last Known Good (LKG) manager** designed to sit behind Caddy as a wildcard catch-all. It provides:
 
-## How it works
-- The landing page (`/`) renders links defined in `content.json`.
-- The admin page (`/admin`) fetches and edits the same JSON file through `/api/content` and `/api/upload`.
-- Runtime data lives at `/var/caddy/content.json`. On startup, the server copies the template from `/app/content/content.json` if the runtime file is missing.
+- A simple, JSON-backed landing page  
+- An admin UI for editing `content.json`  
+- A built-in **Caddyfile editor with automatic versioned backups**  
 
-### Caddyfile Integration
-- `/config` is mounted from your host or Caddy container to share the active Caddy configuration.
-- The admin page exposes a **Caddyfile Editor** that reads the current `/config/Caddyfile` via `GET /admin/caddyfile` and writes updates with `POST /admin/caddyfile`.
-- Each save creates a timestamped backup in `/config/backup/Caddyfile.old.YYYYMMDD-HHMMSS` and keeps only the most recent 10 files.
-- The server does not reload or validate Caddyfile contents. After saving, manually restart or reload your Caddy instance to apply changes.
-- Example flow:
-  1. Open `/admin`.
-  2. Edit the Caddyfile text area in the **Caddyfile Editor** panel.
-  3. Click **Save Caddyfile** and apply a manual restart/reload of Caddy.
+caddyLander gives you a single web surface for both landing content and safe configuration edits.
 
-### JSON format
-`content.json` is expected to contain an object with an `items` array:
-```json
-{
-  "items": [
-    {
-      "name": "Example Service",
-      "url": "https://example.org",
-      "desc": "Replace this entry with your own services"
-    }
-  ]
-}
-```
+---
 
-### Local run with Docker
-Build and run with the VETO mnemonic test port (8386 -> 8080 inside the container):
-```bash
-docker build -t caddylander .
-docker run -p 8386:8080 -v caddylander_data:/var/caddy caddylander
-```
+## How It Works
 
-### docker-compose example
-See `docker-compose.example.yml` for a ready-to-use service definition that mounts a shared volume at `/var/caddy` and pulls from the published Docker Hub image `mythosaz/caddylander:main`. Before bringing the stack up, create the shared volume that both Caddy and caddyLander will use for runtime data:
-```bash
-docker volume create caddy_var
-```
+### Landing Page
+- The root page (`/`) renders service links defined in `content.json`.
+- Runtime state lives at:
 
-For ad-hoc testing, uncomment the provided `ports` section to map 8386 to 8080 (VETO mnemonic).
+        /var/caddy/content.json
 
-### Deployment notes
-caddyLander should run on the same Docker network as your Caddy instance so that reverse proxy rules can point traffic at the caddyLander container. Mount the same Caddy configuration directory into both containers by mapping `/config` in caddyLander to the directory Caddy uses for its `Caddyfile`. This allows the admin UI to edit the live configuration while Caddy continues to read from its own mount.
+- On first run, if no runtime file exists, the server copies the bundled template from:
 
-### Caddy integration
-Configure a wildcard site to reverse-proxy to the container:
-```caddyfile
-*.example.com {
-    reverse_proxy caddylander:8080
-}
-```
-Point Caddy at the running service (compose service name `caddylander` or an equivalent host) so any unmatched subdomains land on the portal. When running under compose, ensure the same `caddy_var` volume is mounted into your Caddy service so that uploads and edits persist across both containers, and that `/config` maps to the live Caddy configuration directory.
+        /app/content/content.json
 
 ### Admin UI
-The admin page retains the JSON editor for `content.json` and adds a **Caddyfile Editor** panel with a simple textarea and save button. After saving, an inline notice reminds you that a Caddy restart is required.
+The admin interface (`/admin`) provides two editors:
+
+#### 1. Landing Content Editor
+- Retrieves and updates `content.json` via `/api/content` and `/api/upload`.
+- Persists changes to the `/var/caddy` shared volume.
+
+#### 2. Caddyfile Editor (LKG Manager)
+- Reads the live `/config/Caddyfile` via `GET /admin/caddyfile`.
+- Saves updates via `POST /admin/caddyfile`.
+- Each save creates a timestamped backup:
+
+        /config/backup/Caddyfile.old.YYYYMMDD-HHMMSS
+
+- Only the most recent **10 backups** are retained.
+- No validation or reload is performed automatically.
+- After saving, the UI displays a **“Restart Caddy Required”** notice.
+
+This provides a simple, browser-accessible way to view, edit, and recover your Caddy configuration without SSH.
+
+---
+
+## JSON Format
+
+Expected structure:
+
+        {
+          "items": [
+            {
+              "name": "Example Service",
+              "url": "https://example.org",
+              "desc": "Replace this entry with your own services"
+            }
+          ]
+        }
+
+---
+
+## Local Run with Docker
+
+Use the VETO mnemonic port (8386 → 8080):
+
+        docker build -t caddylander .
+        docker run -p 8386:8080 -v caddylander_data:/var/caddy caddylander
+
+---
+
+## docker-compose Example
+
+See `docker-compose.example.yml` for a full stack using the published image `mythosaz/caddylander:main`.
+
+Before deploying:
+
+        docker volume create caddy_var
+        docker volume create caddy_config
+
+These volumes store:
+
+- Landing page data: `/var/caddy`
+- Live Caddy configuration: `/config`
+
+The compose file includes an optional local debug port (8386).
+
+---
+
+## Deployment Notes
+
+- caddyLander must run on the **same Docker or LAN network** as your Caddy container so it can be referenced in `reverse_proxy` directives.
+- Mount the **same configuration directory** that Caddy uses into caddyLander at `/config` so the admin UI edits the live Caddyfile.
+- Mount `caddy_var` into both Caddy and caddyLander if you want shared JSON state between the landing page and your reverse proxy environment.
+
+---
+
+## Caddy Integration
+
+Wildcard example:
+
+        *.example.com {
+            reverse_proxy caddylander:8080
+        }
+
+When running under Compose, reference the service name (`caddylander`) or use a LAN IP if running on MACVLAN/QNAP networks.
+
+For best results:
+- Load specific service routes first  
+- Place the wildcard route last  
+- Let caddyLander handle everything unmatched  
+
+---
+
+## Admin UI Summary
+
+Includes:
+
+- **Landing content editor** (JSON-based)
+- **Caddyfile Editor** (view + edit + save)
+- **Automatic timestamped LKG backups** (retains last 10)
+- **Restart notice** after saving
+
+This makes caddyLander a convenient and safe single-stop management page for Caddy-based homelab deployments.
+
+---
 
 ## Licensing
-This project is licensed under the MIT License. See `LICENSE` for details.
+
+MIT License — see `LICENSE`.
