@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - next
     tags:
       - "*"
 
@@ -35,4 +36,6 @@ jobs:
           tags: |
             docker.io/${{ secrets.DOCKERHUB_USERNAME }}/caddylander:latest
             docker.io/${{ secrets.DOCKERHUB_USERNAME }}/caddylander:${{ github.ref_name }}
-            docker.io/mythosaz/caddylander:main
+            docker.io/${{ secrets.DOCKERHUB_USERNAME }}/caddylander:next
+            docker.io/mythosaz/caddylander:${{ github.ref_name }}
+            docker.io/mythosaz/caddylander:next
