@@ -2,62 +2,6 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Admin</title>
-  <style>
-    body { font-family: system-ui; background:#222; color:#eee; padding:2rem; }
-    textarea { width:100%; height:300px; background:#111; color:#eee; }
-    button { padding:0.5rem 1.2rem; margin-top:1rem; }
-  </style>
-</head>
-<body>
-  <h1>Admin</h1>
-
-  <button onclick="download()">Download</button>
-
-  <h3>Edit JSON</h3>
-  <textarea id="editor"></textarea><br>
-  <button onclick="upload()">Upload</button>
-
-  <script>
-    function load() {
-      fetch("/api/content")
-        .then(r => r.json())
-        .then(j => { editor.value = JSON.stringify(j, null, 2); });
-    }
-
-    function download() {
-      fetch("/api/content")
-        .then(r => r.blob())
-        .then(b => {
-          let url = URL.createObjectURL(b);
-          let a = document.createElement("a");
-          a.href = url;
-          a.download = "content.json";
-          a.click();
-        });
-    }
-
-    function upload() {
-      const text = editor.value;
-      fetch("/api/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: "content=" + encodeURIComponent(text)
-      }).then(_ => alert("Updated"));
-    }
-
-    load();
-  </script>
-</body>
-</html>
-
-/var/caddy # ^C
-
-/var/caddy # cat index.html 
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
   <title>Landing</title>
   <style>
     body { font-family: system-ui; background: #111; color: #eee; padding: 2rem; }

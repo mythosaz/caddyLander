@@ -1,8 +1,9 @@
 {
   "items": [
-    { "name": "Home Assistant", "url": "https://homeassistant.stenger.zone", "desc": "Main dashboard" },
-    { "name": "Portainer", "url": "https://portainer.stenger.zone", "desc": "Container management" },
-    { "name": "Office", "url": "https://office.stenger.zone", "desc": "Office suite" },
-    { "name": "Vert", "url": "https://vert.stenger.zone", "desc": "Video tools" }
+    {
+      "name": "Example Service",
+      "url": "https://example.org",
+      "desc": "Replace this entry with your own services"
+    }
   ]
 }
