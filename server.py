@@ -18,7 +18,7 @@ CADDYFILE_PATH = CONFIG_BASE / "Caddyfile"
 BACKUP_DIR = CONFIG_BASE / "backup"
 CONTENT_BACKUP_DIR = CONFIG_BASE / "content-backup"
 TEMP_CADDYFILE = Path("/tmp/caddyfile.upload")
-CADDY_BIN = Path("/usr/local/bin/caddy")
+CADDY_BIN = Path("/app/vendor/caddy/caddy")
 
 DEFAULT_ADMIN_PASSWORD = "caddyLander"
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
