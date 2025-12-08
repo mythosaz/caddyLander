@@ -3,6 +3,7 @@ import http.server
 import json
 import os
 import shutil
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -16,6 +17,8 @@ CONFIG_BASE = Path("/config")
 CADDYFILE_PATH = CONFIG_BASE / "Caddyfile"
 BACKUP_DIR = CONFIG_BASE / "backup"
 CONTENT_BACKUP_DIR = CONFIG_BASE / "content-backup"
+TEMP_CADDYFILE = Path("/tmp/caddyfile.upload")
+CADDY_BIN = Path("/usr/local/bin/caddy")
 
 DEFAULT_ADMIN_PASSWORD = "caddyLander"
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
@@ -195,8 +198,49 @@ class Handler(http.server.BaseHTTPRequestHandler):
         raw_body = read_body(self)
         new_content = raw_body.decode("utf-8")
 
-        CADDYFILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        # Step 1: Write to temp file
+        TEMP_CADDYFILE.write_text(new_content, encoding="utf-8")
 
+        # Step 2: Format
+        result = subprocess.run(
+            [str(CADDY_BIN), "fmt", "--overwrite", str(TEMP_CADDYFILE)],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            response = json.dumps({
+                "success": False,
+                "stage": "fmt",
+                "output": result.stderr
+            }).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(response)))
+            self.end_headers()
+            self.wfile.write(response)
+            return
+
+        # Step 3: Validate
+        result = subprocess.run(
+            [str(CADDY_BIN), "validate", "--config", str(TEMP_CADDYFILE)],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            response = json.dumps({
+                "success": False,
+                "stage": "validate",
+                "output": result.stderr
+            }).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(response)))
+            self.end_headers()
+            self.wfile.write(response)
+            return
+
+        # Step 4: Backup previous version if exists
+        CADDYFILE_PATH.parent.mkdir(parents=True, exist_ok=True)
         previous_content = ""
         if CADDYFILE_PATH.exists():
             previous_content = CADDYFILE_PATH.read_text(encoding="utf-8")
@@ -204,9 +248,33 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if previous_content:
             self._backup_caddyfile(previous_content)
 
-        CADDYFILE_PATH.write_text(new_content, encoding="utf-8")
+        # Step 5: Promote temp to real file
+        shutil.move(str(TEMP_CADDYFILE), str(CADDYFILE_PATH))
 
-        response = json.dumps({"status": "ok", "restart_required": True}).encode()
+        # Step 6: Reload Caddy
+        result = subprocess.run(
+            [str(CADDY_BIN), "reload", "--config", str(CADDYFILE_PATH)],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            response = json.dumps({
+                "success": False,
+                "stage": "reload",
+                "output": result.stderr
+            }).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(response)))
+            self.end_headers()
+            self.wfile.write(response)
+            return
+
+        # Step 7: Success
+        response = json.dumps({
+            "success": True,
+            "stage": "complete"
+        }).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(response)))
