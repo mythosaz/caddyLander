@@ -8,8 +8,8 @@ import { lintKeymap } from '@codemirror/lint';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { json } from '@codemirror/lang-json';
 import { StreamLanguage } from '@codemirror/language';
-import { ini } from '@codemirror/legacy-modes/mode/ini.js';
-import { nginx } from '@codemirror/legacy-modes/mode/nginx.js';
+import { ini } from '@codemirror/legacy-modes/mode/ini';
+import { nginx } from '@codemirror/legacy-modes/mode/nginx';
 import { indentWithTab } from '@codemirror/commands';
 
 // Create language compartment for dynamic switching
