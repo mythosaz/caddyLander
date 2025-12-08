@@ -1,4 +1,8 @@
 {
+  "siteTitle": "My Services",
+  "siteSubtitle": "Homelab Dashboard",
+  "theme": "auto",
+  "favicon": "/static/favicon.ico",
   "items": [
     {
       "name": "Example Service",
@@ -6,9 +10,45 @@
       "desc": "Replace this entry with your own services"
     },
     {
+      "name": "Home Assistant",
+      "url": "https://ha.example.com",
+      "desc": "Home automation dashboard",
+      "icon": "🏠",
+      "group": "Home"
+    },
+    {
+      "name": "Proxmox",
+      "url": "https://proxmox.example.com",
+      "desc": "Virtualization management",
+      "icon": "💻",
+      "group": "Infrastructure"
+    },
+    {
+      "name": "TrueNAS",
+      "url": "https://nas.example.com",
+      "desc": "Network attached storage",
+      "icon": "💾",
+      "group": "Infrastructure"
+    },
+    {
+      "name": "Jellyfin",
+      "url": "https://jellyfin.example.com",
+      "desc": "Media server",
+      "icon": "🎬",
+      "group": "Media"
+    },
+    {
+      "name": "Nextcloud",
+      "url": "https://nextcloud.example.com",
+      "desc": "Personal cloud storage",
+      "icon": "☁️",
+      "group": "Productivity"
+    },
+    {
       "name": "caddyLander on GitHub",
       "url": "https://github.com/mythosaz/caddyLander",
-      "desc": "Project source, docs, and issues"
+      "desc": "Project source, docs, and issues",
+      "icon": "📦"
     },
     {
       "name": "Caddy Web Server",

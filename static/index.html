@@ -4,29 +4,170 @@
   <meta charset="UTF-8">
   <title>Landing</title>
   <style>
-    body { font-family: system-ui; background: #111; color: #eee; padding: 2rem; }
-    .item { margin-bottom: 1rem; }
-    a { color: #7aa2f7; }
-    #admin { position: fixed; top: 10px; right: 10px; font-size: 24px; }
+    :root {
+      --bg-color: #111;
+      --text-color: #eee;
+      --link-color: #7aa2f7;
+      --group-color: #999;
+      --border-color: #333;
+    }
+
+    [data-theme="light"] {
+      --bg-color: #f5f5f5;
+      --text-color: #222;
+      --link-color: #2563eb;
+      --group-color: #666;
+      --border-color: #ddd;
+    }
+
+    body {
+      font-family: system-ui;
+      background: var(--bg-color);
+      color: var(--text-color);
+      padding: 2rem;
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+    .item {
+      margin-bottom: 1rem;
+    }
+
+    a {
+      color: var(--link-color);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    #admin {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      font-size: 24px;
+    }
+
+    .subtitle {
+      color: var(--group-color);
+      font-size: 1.2rem;
+      margin-top: -0.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .group-header {
+      font-size: 1.3rem;
+      font-weight: bold;
+      margin-top: 2rem;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid var(--border-color);
+      color: var(--group-color);
+    }
+
+    .group-header:first-child {
+      margin-top: 0;
+    }
+
+    .icon {
+      display: inline-block;
+      width: 1.5em;
+      text-align: center;
+      margin-right: 0.3em;
+    }
   </style>
 </head>
 <body>
   <a id="admin" href="/admin">🔒</a>
 
-  <h1>Services</h1>
+  <h1 id="site-title">Services</h1>
+  <div id="site-subtitle" class="subtitle"></div>
   <div id="content"></div>
 
   <script>
     fetch("/api/content")
       .then(r => r.json())
-      .then(d => {
-        let c = document.getElementById("content");
-        d.items.forEach(i => {
-          let div = document.createElement("div");
-          div.className = "item";
-          div.innerHTML = `<a href="${i.url}">${i.name}</a> — ${i.desc || ""}`;
-          c.appendChild(div);
+      .then(data => {
+        // Apply site title
+        if (data.siteTitle) {
+          document.getElementById("site-title").textContent = data.siteTitle;
+          document.title = data.siteTitle;
+        }
+
+        // Apply site subtitle
+        if (data.siteSubtitle) {
+          document.getElementById("site-subtitle").textContent = data.siteSubtitle;
+        }
+
+        // Apply theme
+        const theme = data.theme || "dark";
+        if (theme === "auto") {
+          // Use system preference
+          if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+            document.documentElement.setAttribute('data-theme', 'light');
+          }
+        } else if (theme === "light") {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+
+        // Apply favicon
+        if (data.favicon) {
+          let link = document.querySelector("link[rel~='icon']");
+          if (!link) {
+            link = document.createElement('link');
+            link.rel = 'icon';
+            document.getElementsByTagName('head')[0].appendChild(link);
+          }
+          link.href = data.favicon;
+        }
+
+        // Render items
+        const content = document.getElementById("content");
+        const items = data.items || [];
+
+        // Group items
+        const grouped = {};
+        const ungrouped = [];
+
+        items.forEach(item => {
+          if (item.group) {
+            if (!grouped[item.group]) {
+              grouped[item.group] = [];
+            }
+            grouped[item.group].push(item);
+          } else {
+            ungrouped.push(item);
+          }
         });
+
+        // Render ungrouped items first
+        ungrouped.forEach(item => {
+          content.appendChild(createItemElement(item));
+        });
+
+        // Render grouped items
+        Object.keys(grouped).sort().forEach(groupName => {
+          const header = document.createElement("div");
+          header.className = "group-header";
+          header.textContent = groupName;
+          content.appendChild(header);
+
+          grouped[groupName].forEach(item => {
+            content.appendChild(createItemElement(item));
+          });
+        });
+
+        function createItemElement(item) {
+          const div = document.createElement("div");
+          div.className = "item";
+
+          const icon = item.icon ? `<span class="icon">${item.icon}</span>` : '';
+          const name = item.name || item.title || 'Unnamed';
+          const desc = item.desc ? ` — ${item.desc}` : '';
+
+          div.innerHTML = `${icon}<a href="${item.url}">${name}</a>${desc}`;
+          return div;
+        }
       });
   </script>
 </body>

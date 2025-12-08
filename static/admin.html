@@ -23,6 +23,29 @@
   <div class="panel">
     <button onclick="download()">Download</button>
 
+    <details style="margin: 1rem 0; padding: 0.75rem; background: #333; border-radius: 6px;">
+      <summary style="cursor: pointer; font-weight: bold;">📖 Content Schema Help</summary>
+      <div style="margin-top: 0.75rem; font-size: 0.9rem; line-height: 1.6;">
+        <p><strong>Top-level fields (all optional):</strong></p>
+        <ul>
+          <li><code>siteTitle</code> (string) — Landing page heading</li>
+          <li><code>siteSubtitle</code> (string) — Subheading/tagline</li>
+          <li><code>theme</code> (string) — "light", "dark", or "auto" (system preference)</li>
+          <li><code>favicon</code> (string) — Path under /static (e.g., "/static/favicon.ico")</li>
+          <li><code>items</code> (array) — Array of link objects</li>
+        </ul>
+        <p><strong>Link object fields:</strong></p>
+        <ul>
+          <li><code>name</code> (string, required) — Display name</li>
+          <li><code>url</code> (string, required) — Target URL</li>
+          <li><code>desc</code> (string, optional) — Description text</li>
+          <li><code>icon</code> (string, optional) — Emoji or symbol to display</li>
+          <li><code>group</code> (string, optional) — Group header for categorization</li>
+        </ul>
+        <p><em>Note: Schema is backward-compatible. Old files without new fields work fine.</em></p>
+      </div>
+    </details>
+
     <h3>Edit JSON</h3>
     <textarea id="editor"></textarea><br>
     <button onclick="upload()">Upload</button>
