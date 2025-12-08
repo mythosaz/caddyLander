@@ -201,26 +201,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # Step 1: Write to temp file
         TEMP_CADDYFILE.write_text(new_content, encoding="utf-8")
 
-        # Step 2: Validate
-        result = subprocess.run(
-            [str(CADDY_BIN), "validate", "--config", str(TEMP_CADDYFILE)],
-            capture_output=True,
-            text=True
-        )
-        if result.returncode != 0:
-            response = json.dumps({
-                "success": False,
-                "stage": "validate",
-                "output": result.stderr
-            }).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(response)))
-            self.end_headers()
-            self.wfile.write(response)
-            return
-
-        # Step 3: Format
+        # Step 2: Format
         result = subprocess.run(
             [str(CADDY_BIN), "fmt", "--overwrite", str(TEMP_CADDYFILE)],
             capture_output=True,
@@ -230,6 +211,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
             response = json.dumps({
                 "success": False,
                 "stage": "fmt",
+                "output": result.stderr
+            }).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(response)))
+            self.end_headers()
+            self.wfile.write(response)
+            return
+
+        # Step 3: Validate
+        result = subprocess.run(
+            [str(CADDY_BIN), "validate", "--config", str(TEMP_CADDYFILE)],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            response = json.dumps({
+                "success": False,
+                "stage": "validate",
                 "output": result.stderr
             }).encode()
             self.send_response(200)
