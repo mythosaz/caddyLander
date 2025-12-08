@@ -8,7 +8,6 @@ import { lintKeymap } from '@codemirror/lint';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { json } from '@codemirror/lang-json';
 import { StreamLanguage } from '@codemirror/language';
-import { ini } from '@codemirror/legacy-modes/mode/ini';
 import { nginx } from '@codemirror/legacy-modes/mode/nginx';
 import { indentWithTab } from '@codemirror/commands';
 
@@ -197,10 +196,23 @@ function downloadFile() {
   URL.revokeObjectURL(url);
 }
 
+function setContent(content) {
+  if (!editorView) return;
+
+  editorView.dispatch({
+    changes: {
+      from: 0,
+      to: editorView.state.doc.length,
+      insert: content
+    }
+  });
+}
+
 // Export functions for global access
 window.CaddyEditor = {
   init: initEditor,
   loadFile,
   saveFile,
-  downloadFile
+  downloadFile,
+  setContent
 };
