@@ -5,8 +5,7 @@ await esbuild.build({
   bundle: true,
   outfile: 'static/editor.bundle.js',
   format: 'iife',
-  globalName: 'CaddyEditor',
-  minify: true,
+  minify: true
 });
 
 console.log('CodeMirror bundle created at static/editor.bundle.js');
