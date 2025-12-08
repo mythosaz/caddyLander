@@ -1,0 +1,5 @@
+node_modules/
+static/editor.bundle.js
+package-lock.json
+*.log
+.DS_Store

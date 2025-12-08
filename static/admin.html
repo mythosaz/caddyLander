@@ -4,13 +4,113 @@
   <meta charset="UTF-8">
   <title>Admin</title>
   <style>
-    body { font-family: system-ui; background:#222; color:#eee; padding:2rem; }
-    textarea { width:100%; height:300px; background:#111; color:#eee; }
-    button { padding:0.5rem 1.2rem; margin-top:1rem; }
-    select { margin-top: 0.5rem; }
-    .panel { margin-bottom: 2rem; }
-    .status { margin-top: 0.5rem; font-weight: bold; }
-    .note { background: #333; padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem; }
+    body {
+      font-family: system-ui;
+      background: #222;
+      color: #eee;
+      padding: 2rem;
+      margin: 0;
+    }
+
+    button {
+      padding: 0.5rem 1.2rem;
+      margin: 0.25rem;
+      background: #444;
+      color: #eee;
+      border: 1px solid #666;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #555;
+    }
+
+    button.active {
+      background: #0066cc;
+      border-color: #0066cc;
+    }
+
+    select {
+      margin: 0.5rem 0;
+      padding: 0.5rem;
+      background: #333;
+      color: #eee;
+      border: 1px solid #666;
+      border-radius: 4px;
+    }
+
+    .panel {
+      margin-bottom: 2rem;
+    }
+
+    .status {
+      margin-top: 0.5rem;
+      font-weight: bold;
+      padding: 0.5rem;
+      border-radius: 4px;
+      background: #333;
+    }
+
+    .note {
+      background: #333;
+      padding: 0.75rem;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+    }
+
+    .file-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .file-tabs button {
+      flex: 1;
+    }
+
+    .editor-container {
+      border: 1px solid #444;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 1rem;
+      background: #282c34;
+    }
+
+    .editor-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .cm-editor {
+      height: 500px;
+      font-size: 14px;
+    }
+
+    details {
+      margin: 1rem 0;
+      padding: 0.75rem;
+      background: #333;
+      border-radius: 6px;
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    details div {
+      margin-top: 0.75rem;
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+
+    code {
+      background: #444;
+      padding: 0.2rem 0.4rem;
+      border-radius: 3px;
+    }
   </style>
 </head>
 <body>
@@ -21,11 +121,16 @@
   </div>
 
   <div class="panel">
-    <button onclick="download()">Download</button>
+    <h3>File Editor</h3>
 
-    <details style="margin: 1rem 0; padding: 0.75rem; background: #333; border-radius: 6px;">
-      <summary style="cursor: pointer; font-weight: bold;">📖 Content Schema Help</summary>
-      <div style="margin-top: 0.75rem; font-size: 0.9rem; line-height: 1.6;">
+    <div class="file-tabs">
+      <button id="btn-content" onclick="switchFile('content.json')" class="active">content.json</button>
+      <button id="btn-caddyfile" onclick="switchFile('Caddyfile')">Caddyfile</button>
+    </div>
+
+    <details id="schema-help" style="display: none;">
+      <summary>Content Schema Help</summary>
+      <div>
         <p><strong>Top-level fields (all optional):</strong></p>
         <ul>
           <li><code>siteTitle</code> (string) — Landing page heading</li>
@@ -46,14 +151,21 @@
       </div>
     </details>
 
-    <h3>Edit JSON</h3>
-    <textarea id="editor"></textarea><br>
-    <button onclick="upload()">Upload</button>
-    <div id="content-status" class="status"></div>
+    <div class="editor-container">
+      <div id="editor"></div>
+    </div>
+
+    <div class="editor-actions">
+      <button onclick="saveCurrentFile()">Save</button>
+      <button onclick="downloadCurrentFile()">Download</button>
+    </div>
+
+    <div id="content-status" class="status" style="display: none;"></div>
+    <div id="caddyfile-status" class="status" style="display: none;"></div>
   </div>
 
   <div class="panel">
-    <h3>Content Backups</h3>
+    <h3 id="backup-title">Content Backups</h3>
     <div>
       <label for="backup-select">Select version:</label><br>
       <select id="backup-select"></select>
@@ -63,35 +175,56 @@
     <div class="status">Last 10 backups are retained.</div>
   </div>
 
-  <div class="panel">
-    <h3>Caddyfile Editor</h3>
-    <textarea id="caddyfile-editor"></textarea><br>
-    <button onclick="saveCaddyfile()">Save Caddyfile</button>
-    <div id="caddyfile-status" class="status"></div>
-  </div>
-
-  <div class="panel">
-    <h3>Caddyfile Backups</h3>
-    <div>
-      <label for="caddyfile-backup-select">Select version:</label><br>
-      <select id="caddyfile-backup-select"></select>
-    </div>
-    <button onclick="loadCaddyfileBackupToEditor()">Load into editor</button>
-    <button onclick="restoreCaddyfileBackup()">Restore</button>
-    <div class="status">Last 10 backups are retained.</div>
-  </div>
-
+  <script src="/static/editor.bundle.js"></script>
   <script>
-    function loadJson() {
-      fetch("/api/content")
-        .then(r => r.json())
-        .then(j => { editor.value = JSON.stringify(j, null, 2); });
+    let currentFile = 'content.json';
+
+    // Initialize editor
+    document.addEventListener('DOMContentLoaded', () => {
+      CaddyEditor.init(document.getElementById('editor'));
+      loadAdminInfo();
+      switchFile('content.json');
+    });
+
+    function switchFile(fileName) {
+      currentFile = fileName;
+
+      // Update button states
+      document.getElementById('btn-content').classList.toggle('active', fileName === 'content.json');
+      document.getElementById('btn-caddyfile').classList.toggle('active', fileName === 'Caddyfile');
+
+      // Show/hide schema help
+      document.getElementById('schema-help').style.display = fileName === 'content.json' ? 'block' : 'none';
+
+      // Update backup title
+      document.getElementById('backup-title').textContent = fileName === 'content.json' ? 'Content Backups' : 'Caddyfile Backups';
+
+      // Hide both status messages
+      document.getElementById('content-status').style.display = 'none';
+      document.getElementById('caddyfile-status').style.display = 'none';
+
+      // Load the file
+      CaddyEditor.loadFile(fileName);
+
+      // Refresh backups
+      refreshBackups();
     }
 
-    function loadCaddyfile() {
-      fetch("/admin/caddyfile")
-        .then(r => r.text())
-        .then(t => { document.getElementById("caddyfile-editor").value = t; });
+    function saveCurrentFile() {
+      CaddyEditor.saveFile();
+
+      // Show appropriate status message
+      if (currentFile === 'content.json') {
+        document.getElementById('content-status').style.display = 'block';
+        document.getElementById('caddyfile-status').style.display = 'none';
+      } else {
+        document.getElementById('content-status').style.display = 'none';
+        document.getElementById('caddyfile-status').style.display = 'block';
+      }
+    }
+
+    function downloadCurrentFile() {
+      CaddyEditor.downloadFile();
     }
 
     function loadAdminInfo() {
@@ -107,45 +240,15 @@
         });
     }
 
-    function download() {
-      fetch("/api/content")
-        .then(r => r.blob())
-        .then(b => {
-          let url = URL.createObjectURL(b);
-          let a = document.createElement("a");
-          a.href = url;
-          a.download = "content.json";
-          a.click();
-        });
-    }
-
-    function upload() {
-      const text = editor.value;
-      const status = document.getElementById("content-status");
-      status.textContent = "";
-      fetch("/api/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: "content=" + encodeURIComponent(text)
-      })
-        .then(r => {
-          if (!r.ok) throw new Error("Failed");
-          return r.json();
-        })
-        .then(_ => {
-          status.textContent = "Saved and backed up previous version.";
-          refreshBackups();
-        })
-        .catch(_ => {
-          status.textContent = "Error saving content.";
-        });
-    }
-
     function refreshBackups() {
       const select = document.getElementById("backup-select");
       select.innerHTML = "";
 
-      fetch("/api/admin/content/backups")
+      const endpoint = currentFile === 'content.json'
+        ? '/api/admin/content/backups'
+        : '/api/admin/caddyfile/backups';
+
+      fetch(endpoint)
         .then(r => r.json())
         .then(({ backups }) => {
           backups.forEach(entry => {
@@ -158,46 +261,56 @@
         });
     }
 
-    function refreshCaddyfileBackups() {
-      const select = document.getElementById("caddyfile-backup-select");
-      select.innerHTML = "";
-
-      fetch("/api/admin/caddyfile/backups")
-        .then(r => r.json())
-        .then(({ backups }) => {
-          backups.forEach(entry => {
-            const option = document.createElement("option");
-            const date = new Date(entry.timestamp * 1000);
-            option.value = entry.name;
-            option.textContent = `${entry.name} (${date.toLocaleString()})`;
-            select.appendChild(option);
-          });
-        });
-    }
+    // Make refreshBackups available globally for editor.js
+    window.refreshBackups = refreshBackups;
+    window.refreshCaddyfileBackups = refreshBackups;
 
     function loadBackupToEditor() {
       const select = document.getElementById("backup-select");
       const name = select.value;
       if (!name) return;
 
-      fetch(`/api/admin/content/backup?name=${encodeURIComponent(name)}`)
-        .then(r => r.json())
+      const endpoint = currentFile === 'content.json'
+        ? `/api/admin/content/backup?name=${encodeURIComponent(name)}`
+        : `/api/admin/caddyfile/backup?name=${encodeURIComponent(name)}`;
+
+      fetch(endpoint)
+        .then(r => currentFile === 'content.json' ? r.json() : r.text())
         .then(data => {
-          editor.value = JSON.stringify(data, null, 2);
+          const content = currentFile === 'content.json'
+            ? JSON.stringify(data, null, 2)
+            : data;
+
+          // Update editor content directly
+          if (window.CaddyEditor && window.CaddyEditor.setContent) {
+            window.CaddyEditor.setContent(content);
+          } else {
+            // Fallback: reload the file
+            CaddyEditor.loadFile(currentFile);
+          }
         });
     }
 
     function restoreBackup() {
       const select = document.getElementById("backup-select");
       const name = select.value;
-      const status = document.getElementById("content-status");
+      const statusId = currentFile === 'content.json' ? 'content-status' : 'caddyfile-status';
+      const status = document.getElementById(statusId);
+
       if (!name) {
         status.textContent = "Select a backup first.";
+        status.style.display = 'block';
         return;
       }
 
+      const endpoint = currentFile === 'content.json'
+        ? '/api/admin/content/restore'
+        : '/api/admin/caddyfile/restore';
+
       status.textContent = "";
-      fetch("/api/admin/content/restore", {
+      status.style.display = 'none';
+
+      fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name })
@@ -207,83 +320,21 @@
           return r.json();
         })
         .then(_ => {
-          status.textContent = "Backup restored and previous version saved.";
-          loadJson();
+          const message = currentFile === 'content.json'
+            ? "Backup restored and previous version saved."
+            : "Backup restored and previous version saved. Restart Caddy Required.";
+
+          status.textContent = message;
+          status.style.display = 'block';
+
+          CaddyEditor.loadFile(currentFile);
           refreshBackups();
         })
         .catch(_ => {
           status.textContent = "Error restoring backup.";
+          status.style.display = 'block';
         });
     }
-
-    function saveCaddyfile() {
-      const text = document.getElementById("caddyfile-editor").value;
-      const status = document.getElementById("caddyfile-status");
-      status.textContent = "";
-
-      fetch("/admin/caddyfile", {
-        method: "POST",
-        body: text
-      })
-        .then(r => {
-          if (!r.ok) throw new Error("Failed");
-          return r.json();
-        })
-        .then(_ => {
-          status.textContent = "Restart Caddy Required.";
-          refreshCaddyfileBackups();
-        })
-        .catch(_ => {
-          status.textContent = "Error saving Caddyfile.";
-        });
-    }
-
-    function loadCaddyfileBackupToEditor() {
-      const select = document.getElementById("caddyfile-backup-select");
-      const name = select.value;
-      if (!name) return;
-
-      fetch(`/api/admin/caddyfile/backup?name=${encodeURIComponent(name)}`)
-        .then(r => r.text())
-        .then(text => {
-          document.getElementById("caddyfile-editor").value = text;
-        });
-    }
-
-    function restoreCaddyfileBackup() {
-      const select = document.getElementById("caddyfile-backup-select");
-      const name = select.value;
-      const status = document.getElementById("caddyfile-status");
-      if (!name) {
-        status.textContent = "Select a backup first.";
-        return;
-      }
-
-      status.textContent = "";
-      fetch("/api/admin/caddyfile/restore", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name })
-      })
-        .then(r => {
-          if (!r.ok) throw new Error("Failed");
-          return r.json();
-        })
-        .then(_ => {
-          status.textContent = "Backup restored and previous version saved. Restart Caddy Required.";
-          loadCaddyfile();
-          refreshCaddyfileBackups();
-        })
-        .catch(_ => {
-          status.textContent = "Error restoring backup.";
-        });
-    }
-
-    loadAdminInfo();
-    loadJson();
-    loadCaddyfile();
-    refreshBackups();
-    refreshCaddyfileBackups();
   </script>
 </body>
 </html>
