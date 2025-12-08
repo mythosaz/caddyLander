@@ -159,8 +159,20 @@ async function saveFile() {
 
     const result = await response.json();
 
+    // Handle new pipeline response format for Caddyfile
     if (currentFile === 'Caddyfile') {
-      updateStatus(currentFile, 'Saved. Restart Caddy Required.');
+      if (result.success === false) {
+        // Pipeline failed at some stage
+        const stageLabel = result.stage.charAt(0).toUpperCase() + result.stage.slice(1);
+        updateStatus(currentFile, `${stageLabel} failed: ${result.output}`);
+        return;
+      } else if (result.success === true && result.stage === 'complete') {
+        // Pipeline succeeded
+        updateStatus(currentFile, 'Saved, validated, formatted, and reloaded successfully.');
+      } else {
+        // Fallback for backward compatibility
+        updateStatus(currentFile, 'Saved. Restart Caddy Required.');
+      }
     } else {
       updateStatus(currentFile, 'Saved successfully.');
     }
