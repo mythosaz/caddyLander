@@ -31,16 +31,22 @@ The admin interface (`/admin`) provides two editors:
 
 #### 2. Caddyfile Editor (LKG Manager)
 - Reads the live `/config/Caddyfile` via `GET /admin/caddyfile`.
-- Saves updates via `POST /admin/caddyfile`.
-- Each save creates a timestamped backup:
+- Saves updates via `POST /admin/caddyfile` using a **safe staged pipeline**:
+  1. Writes to `/tmp/caddyfile.upload`
+  2. Validates using `caddy validate`
+  3. Formats using `caddy fmt --overwrite`
+  4. Promotes to `/config/Caddyfile`
+  5. Reloads Caddy with `caddy reload`
+- Each successful save creates a timestamped backup:
 
         /config/backup/Caddyfile.old.YYYYMMDD-HHMMSS
 
 - Only the most recent **10 backups** are retained.
-- No validation or reload is performed automatically.
-- After saving, the UI displays a **“Restart Caddy Required”** notice.
+- If validation, formatting, or reload fails, the operation stops and displays the error.
+- The real Caddyfile is **never modified** unless validation and formatting succeed.
+- On success, Caddy is automatically reloaded with the new configuration.
 
-This provides a simple, browser-accessible way to view, edit, and recover your Caddy configuration without SSH.
+This provides a safe, browser-accessible way to view, edit, and recover your Caddy configuration without SSH or manual validation.
 
 ---
 
@@ -118,8 +124,10 @@ Includes:
 
 - **Landing content editor** (JSON-based)
 - **Caddyfile Editor** (view + edit + save)
+- **Safe staged pipeline** (validate → format → promote → reload)
 - **Automatic timestamped LKG backups** (retains last 10)
-- **Restart notice** after saving
+- **Automatic Caddy reload** on successful save
+- **Clear error messages** if validation or reload fails
 
 This makes caddyLander a convenient and safe single-stop management page for Caddy-based homelab deployments.
 
