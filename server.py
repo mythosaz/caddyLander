@@ -3,6 +3,7 @@ import http.server
 import json
 import os
 import shutil
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -16,6 +17,8 @@ CONFIG_BASE = Path("/config")
 CADDYFILE_PATH = CONFIG_BASE / "Caddyfile"
 BACKUP_DIR = CONFIG_BASE / "backup"
 CONTENT_BACKUP_DIR = CONFIG_BASE / "content-backup"
+TEMP_CADDYFILE = Path("/tmp/caddyfile.upload")
+CADDY_BIN = Path("/app/vendor/caddy/caddy")
 
 DEFAULT_ADMIN_PASSWORD = "caddyLander"
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
@@ -70,6 +73,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not self._require_auth():
                 return
             return self._serve_caddyfile_backup(parsed)
+        if parsed.path == "/favicon.png":
+            return self._serve_file(STATIC_DIR / "favicon.png", "image/png")
+        if parsed.path == "/favicon.svg":
+            return self._serve_file(STATIC_DIR / "favicon.svg", "image/svg+xml")
         if parsed.path.startswith("/static/"):
             target = STATIC_DIR / parsed.path.removeprefix("/static/")
             if target.is_file() and target.resolve().is_relative_to(STATIC_DIR.resolve()):
@@ -115,6 +122,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return "text/css"
         if path.suffix == ".js":
             return "application/javascript"
+        if path.suffix == ".png":
+            return "image/png"
+        if path.suffix == ".svg":
+            return "image/svg+xml"
         return "application/octet-stream"
 
     def _require_auth(self) -> bool:
@@ -195,8 +206,49 @@ class Handler(http.server.BaseHTTPRequestHandler):
         raw_body = read_body(self)
         new_content = raw_body.decode("utf-8")
 
-        CADDYFILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        # Step 1: Write to temp file
+        TEMP_CADDYFILE.write_text(new_content, encoding="utf-8")
 
+        # Step 2: Format
+        result = subprocess.run(
+            [str(CADDY_BIN), "fmt", "--overwrite", str(TEMP_CADDYFILE)],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            response = json.dumps({
+                "success": False,
+                "stage": "fmt",
+                "output": result.stderr
+            }).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(response)))
+            self.end_headers()
+            self.wfile.write(response)
+            return
+
+        # Step 3: Validate (using adapt for syntax-only validation)
+        result = subprocess.run(
+            [str(CADDY_BIN), "adapt", "--adapter", "caddyfile", "--config", str(TEMP_CADDYFILE)],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            response = json.dumps({
+                "success": False,
+                "stage": "validate",
+                "output": result.stderr
+            }).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(response)))
+            self.end_headers()
+            self.wfile.write(response)
+            return
+
+        # Step 4: Backup previous version if exists
+        CADDYFILE_PATH.parent.mkdir(parents=True, exist_ok=True)
         previous_content = ""
         if CADDYFILE_PATH.exists():
             previous_content = CADDYFILE_PATH.read_text(encoding="utf-8")
@@ -204,9 +256,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if previous_content:
             self._backup_caddyfile(previous_content)
 
-        CADDYFILE_PATH.write_text(new_content, encoding="utf-8")
+        # Step 5: Promote temp to real file
+        shutil.move(str(TEMP_CADDYFILE), str(CADDYFILE_PATH))
 
-        response = json.dumps({"status": "ok", "restart_required": True}).encode()
+        # Step 6: Success (Caddy reload must be done externally)
+        response = json.dumps({
+            "success": True,
+            "stage": "complete",
+            "message": "Caddyfile saved. Reload Caddy to apply changes."
+        }).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(response)))
