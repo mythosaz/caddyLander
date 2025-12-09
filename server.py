@@ -73,6 +73,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not self._require_auth():
                 return
             return self._serve_caddyfile_backup(parsed)
+        if parsed.path == "/favicon.png":
+            return self._serve_file(STATIC_DIR / "favicon.png", "image/png")
+        if parsed.path == "/favicon.svg":
+            return self._serve_file(STATIC_DIR / "favicon.svg", "image/svg+xml")
         if parsed.path.startswith("/static/"):
             target = STATIC_DIR / parsed.path.removeprefix("/static/")
             if target.is_file() and target.resolve().is_relative_to(STATIC_DIR.resolve()):
@@ -118,6 +122,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return "text/css"
         if path.suffix == ".js":
             return "application/javascript"
+        if path.suffix == ".png":
+            return "image/png"
+        if path.suffix == ".svg":
+            return "image/svg+xml"
         return "application/octet-stream"
 
     def _require_auth(self) -> bool:
