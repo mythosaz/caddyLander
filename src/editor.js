@@ -168,10 +168,11 @@ async function saveFile() {
         return;
       } else if (result.success === true && result.stage === 'complete') {
         // Pipeline succeeded
-        updateStatus(currentFile, 'Saved, validated, formatted, and reloaded successfully.');
+        const serverMessage = result.message || 'Saved, validated, formatted. Reload Caddy to apply changes.';
+        updateStatus(currentFile, serverMessage);
       } else {
         // Fallback for backward compatibility
-        updateStatus(currentFile, 'Saved. Restart Caddy Required.');
+        updateStatus(currentFile, 'Saved. Reload Caddy to apply changes.');
       }
     } else {
       updateStatus(currentFile, 'Saved successfully.');

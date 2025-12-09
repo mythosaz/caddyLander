@@ -329,7 +329,7 @@
         .then(_ => {
           const message = currentFile === 'content.json'
             ? "Backup restored and previous version saved."
-            : "Backup restored and previous version saved. Restart Caddy Required.";
+            : "Backup restored and previous version saved. Reload Caddy to apply changes.";
 
           status.textContent = message;
           status.style.display = 'block';
