@@ -251,29 +251,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # Step 5: Promote temp to real file
         shutil.move(str(TEMP_CADDYFILE), str(CADDYFILE_PATH))
 
-        # Step 6: Reload Caddy
-        result = subprocess.run(
-            [str(CADDY_BIN), "reload", "--config", str(CADDYFILE_PATH)],
-            capture_output=True,
-            text=True
-        )
-        if result.returncode != 0:
-            response = json.dumps({
-                "success": False,
-                "stage": "reload",
-                "output": result.stderr
-            }).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(response)))
-            self.end_headers()
-            self.wfile.write(response)
-            return
-
-        # Step 7: Success
+        # Step 6: Success (Caddy reload must be done externally)
         response = json.dumps({
             "success": True,
-            "stage": "complete"
+            "stage": "complete",
+            "message": "Caddyfile saved. Reload Caddy to apply changes."
         }).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
