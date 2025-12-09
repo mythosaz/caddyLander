@@ -1,14 +1,33 @@
 # caddyLander
 
-**caddyLander** is a lightweight landing portal and **Caddyfile Last Known Good (LKG) manager** designed to sit behind Caddy as a wildcard catch-all. It provides:
+[![Docker Pulls](https://img.shields.io/docker/pulls/mythosaz/caddylander)](https://hub.docker.com/r/mythosaz/caddylander)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/mythosaz/caddyLander?style=flat)](https://github.com/mythosaz/caddyLander/stargazers)
+![Image Size](https://img.shields.io/docker/image-size/mythosaz/caddylander/main)
 
-- A JSON-backed landing page with theming, icons, grouping, and favicon support
-- A password-protected admin UI for editing `content.json`
-- A built-in **CodeMirror editor** with two language parsers: JSON for `content.json` and NGINX-style syntax for `Caddyfile`
-- A vendored **Caddy** binary used for formatting and validating the uploaded Caddyfile
-- Automatic, timestamped backups for both `content.json` and the Caddyfile (last 10 copies kept)
+<pre>
+                       █████     █████            █████                                █████                   
+                       ░░███     ░░███            ░░███                                ░░███                    
+  ██████   ██████    ███████   ███████  █████ ████ ░███         ██████   ████████    ███████   ██████  ████████ 
+ ███░░███ ░░░░░███  ███░░███  ███░░███ ░░███ ░███  ░███        ░░░░░███ ░░███░░███  ███░░███  ███░░███░░███░░███
+░███ ░░░   ███████ ░███ ░███ ░███ ░███  ░███ ░███  ░███         ███████  ░███ ░███ ░███ ░███ ░███████  ░███ ░░░ 
+░███  ███ ███░░███ ░███ ░███ ░███ ░███  ░███ ░███  ░███      █ ███░░███  ░███ ░███ ░███ ░███ ░███░░░   ░███     
+░░██████ ░░████████░░████████░░████████ ░░███████  ███████████░░████████ ████ █████░░████████░░██████  █████    
+ ░░░░░░   ░░░░░░░░  ░░░░░░░░  ░░░░░░░░   ░░░░░███ ░░░░░░░░░░░  ░░░░░░░░ ░░░░ ░░░░░  ░░░░░░░░  ░░░░░░  ░░░░░     
+                                         ███ ░███                                                               
+                                        ░░██████                                                                
+                                         ░░░░░░                                                                 
+</pre>
+**caddyLander** is a lightweight landing portal and **Caddyfile Last Known Good (LKG) manager** designed to sit behind Caddy as a wildcard catch-all. It’s not a CMS — it’s a safe, minimal control surface for your homelab. It provides:
 
-caddyLander gives you a single, safe web surface for both landing content and configuration edits.
+- A JSON-backed landing page with theming, icons, grouping, and favicon support  
+- A password-protected admin UI for managing `content.json`  
+- A built-in **CodeMirror editor** with JSON and NGINX-style Caddyfile syntax highlighting  
+- A vendored **Caddy** binary that formats, validates, and safely stages Caddyfile updates  
+- Automatic, timestamped backups of both `content.json` and the Caddyfile (last 10 copies kept)
+
+At its core, caddyLander gives you a **single secure web surface** for both your landing content and a **safe, LKG-protected Caddyfile editing workflow**, without ever touching SSH.
+
 
 ---
 
