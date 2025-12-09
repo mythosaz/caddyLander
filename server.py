@@ -220,9 +220,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(response)
             return
 
-        # Step 3: Validate
+        # Step 3: Validate (using adapt for syntax-only validation)
         result = subprocess.run(
-            [str(CADDY_BIN), "validate", "--config", str(TEMP_CADDYFILE)],
+            [str(CADDY_BIN), "adapt", "--adapter", "caddyfile", "--config", str(TEMP_CADDYFILE)],
             capture_output=True,
             text=True
         )
