@@ -12,6 +12,19 @@ caddyLander gives you a single, safe web surface for both landing content and co
 
 ---
 
+Admin Portal:
+
+<img width="1345" height="1451" alt="image" src="https://github.com/user-attachments/assets/3af88fda-eeb8-4dbb-9a9e-56639db1b4f2" />
+
+---
+
+A user-configured landing page:
+
+<img width="1443" height="871" alt="image" src="https://github.com/user-attachments/assets/c35933d4-f422-475c-8380-13df42f59780" />
+
+
+---
+
 ## How It Works
 
 ### Landing Page
@@ -111,20 +124,37 @@ The compose file includes an optional local debug port (8386).
 
 ## Caddy Integration
 
-Wildcard example:
+Wildcard example (full catch-all):
 
-        *.example.com {
-            reverse_proxy caddylander:8080
-        }
+    *.example.com {
+        reverse_proxy caddylander:8080
+    }
 
 When running under Compose, reference the service name (`caddylander`) or use a LAN IP if running on MACVLAN/QNAP networks.
 
 For best results:
-- Load specific service routes first  
-- Place the wildcard route last  
-- Let caddyLander handle everything unmatched  
+- Load specific service routes first
+- Place the wildcard route last
+- Let caddyLander handle everything unmatched
 
----
+
+### Optional: Direct Admin Access Without Using the Wildcard Redirect
+
+If you want a dedicated hostname for admin UI only — without sending normal traffic to the landing page — point it at `/admin.html`:
+
+    caddylander.example.com {
+        reverse_proxy caddylander:8080
+
+        handle_path / {
+            redir /admin.html
+        }
+    }
+
+This gives you:
+- A clean admin-only URL (`https://caddylander.example.com`)
+- No wildcard interference
+- No general redirect — only `/admin.html` is intentionally exposed
+
 
 ## Admin UI Summary
 
