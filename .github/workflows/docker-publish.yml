@@ -7,6 +7,14 @@ on:
       - next
     tags:
       - "v*"
+    paths-ignore:
+      - "*.md"
+      - "docs/**"
+      - "README"
+      - "README.*"
+      - "TODO"
+      - "TODO.*"
+  workflow_dispatch: {}
 
 jobs:
   build:
@@ -29,7 +37,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       #
-      # TAG COMPUTATION — no heredocs, explicit, safe, works everywhere
+      # TAG COMPUTATION — unchanged except for indentation fix
       #
       - id: meta
         name: Compute tags
@@ -65,7 +73,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       #
-      # BUILD + PUSH using multi-line tag output
+      # BUILD + PUSH
       #
       - name: Build and push image
         uses: docker/build-push-action@v5
