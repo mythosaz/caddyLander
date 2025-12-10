@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+import logging
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -23,11 +24,32 @@ CADDY_BIN = Path("/app/vendor/caddy/caddy")
 DEFAULT_ADMIN_PASSWORD = "caddyLander"
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
 
+LOGO = r"""
+                       █████     █████            █████                                █████
+                       ░░███     ░░███            ░░███                                ░░███
+  ██████   ██████    ███████   ███████  █████ ████ ░███         ██████   ████████    ███████   ██████  ████████
+ ███░░███ ░░░░░███  ███░░███  ███░░███ ░░███ ░███  ░███        ░░░░░███ ░░███░░███  ███░░███  ███░░███░░███░░███
+░███ ░░░   ███████ ░███ ░███ ░███ ░███  ░███ ░███  ░███         ███████  ░███ ░███ ░███ ░███ ░███████  ░███ ░░░
+░███  ███ ███░░███ ░███ ░███ ░███ ░███  ░███ ░███  ░███      █ ███░░███  ░███ ░███ ░███ ░███ ░███░░░   ░███
+░░██████ ░░████████░░████████░░████████ ░░███████  ███████████░░████████ ████ █████░░████████░░██████  █████
+ ░░░░░░   ░░░░░░░░  ░░░░░░░░  ░░░░░░░░   ░░░░░███ ░░░░░░░░░░░  ░░░░░░░░ ░░░░ ░░░░░  ░░░░░░░░  ░░░░░░  ░░░░░
+                                         ███ ░███
+                                        ░░██████
+                                         ░░░░░░
+"""
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+LOGGER = logging.getLogger("caddylander")
+
 
 def bootstrap_content() -> None:
     RUNTIME_BASE.mkdir(parents=True, exist_ok=True)
     if not RUNTIME_CONTENT.exists():
         shutil.copyfile(TEMPLATE_CONTENT, RUNTIME_CONTENT)
+        LOGGER.info("Bootstrapped runtime content from template")
 
 
 def read_body(request_handler: http.server.BaseHTTPRequestHandler) -> bytes:
@@ -199,6 +221,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         with open(RUNTIME_CONTENT, "w", encoding="utf-8") as f:
             json.dump(parsed_json, f, ensure_ascii=False, indent=2)
 
+        LOGGER.info("Saved landing content (%s bytes)", len(raw_body))
+
         response = json.dumps({"status": "ok"}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -210,6 +234,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         raw_body = read_body(self)
         new_content = raw_body.decode("utf-8")
 
+        LOGGER.info("Received Caddyfile update (%s bytes)", len(raw_body))
+
         # Step 1: Write to temp file
         TEMP_CADDYFILE.write_text(new_content, encoding="utf-8")
 
@@ -220,6 +246,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             text=True
         )
         if result.returncode != 0:
+            LOGGER.warning("Caddyfile fmt failed: %s", result.stderr.strip())
             response = json.dumps({
                 "success": False,
                 "stage": "fmt",
@@ -239,6 +266,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             text=True
         )
         if result.returncode != 0:
+            LOGGER.warning("Caddyfile validation failed: %s", result.stderr.strip())
             response = json.dumps({
                 "success": False,
                 "stage": "validate",
@@ -251,6 +279,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(response)
             return
 
+        LOGGER.info("Caddyfile validation succeeded")
+
         # Step 4: Backup previous version if exists
         CADDYFILE_PATH.parent.mkdir(parents=True, exist_ok=True)
         previous_content = ""
@@ -262,6 +292,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         # Step 5: Promote temp to real file
         shutil.move(str(TEMP_CADDYFILE), str(CADDYFILE_PATH))
+
+        LOGGER.info("Saved validated Caddyfile to %s", CADDYFILE_PATH)
 
         # Step 6: Success (Caddy reload must be done externally)
         response = json.dumps({
@@ -280,6 +312,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         backup_path = CONTENT_BACKUP_DIR / f"content.json.old.{timestamp}"
         backup_path.write_text(previous_content, encoding="utf-8")
+
+        LOGGER.info("Created content backup %s", backup_path)
 
         backups = sorted(
             CONTENT_BACKUP_DIR.glob("content.json.old.*"),
@@ -345,6 +379,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         with open(RUNTIME_CONTENT, "w", encoding="utf-8") as f:
             json.dump(parsed_json, f, ensure_ascii=False, indent=2)
 
+        LOGGER.info("Restored landing content from backup %s", name)
+
         response = json.dumps({"status": "ok"}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -396,6 +432,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         backup_path = BACKUP_DIR / f"Caddyfile.old.{timestamp}"
         backup_path.write_text(previous_content, encoding="utf-8")
+
+        LOGGER.info("Created Caddyfile backup %s", backup_path)
 
         backups = sorted(
             BACKUP_DIR.glob("Caddyfile.old.*"),
@@ -474,6 +512,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         CADDYFILE_PATH.parent.mkdir(parents=True, exist_ok=True)
         CADDYFILE_PATH.write_text(backup_text, encoding="utf-8")
 
+        LOGGER.info("Restored Caddyfile from backup %s", name)
+
         response = json.dumps({"status": "ok", "restart_required": True}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -483,7 +523,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    print(LOGO)
+    LOGGER.info("Starting caddyLander")
     bootstrap_content()
     server = http.server.ThreadingHTTPServer(("0.0.0.0", 8080), Handler)
-    print("caddylander running on port 8080")
+    LOGGER.info("caddylander running on port 8080")
     server.serve_forever()
