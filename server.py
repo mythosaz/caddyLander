@@ -77,6 +77,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._serve_file(STATIC_DIR / "favicon.png", "image/png")
         if parsed.path == "/favicon.svg":
             return self._serve_file(STATIC_DIR / "favicon.svg", "image/svg+xml")
+        # Allow direct access to static assets without the /static prefix (e.g. /favicon.ico)
+        static_target = (STATIC_DIR / parsed.path.lstrip("/")).resolve()
+        if static_target.is_file() and static_target.is_relative_to(STATIC_DIR.resolve()):
+            return self._serve_file(static_target, self._guess_type(static_target))
         if parsed.path.startswith("/static/"):
             target = STATIC_DIR / parsed.path.removeprefix("/static/")
             if target.is_file() and target.resolve().is_relative_to(STATIC_DIR.resolve()):
@@ -358,7 +362,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 CONTENT_BACKUP_DIR.glob("content.json.old.*"),
                 key=lambda p: p.stat().st_mtime,
                 reverse=True,
-            )
+            )[:10]
         ]
 
         data = json.dumps({"backups": backups}).encode()
@@ -411,7 +415,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 BACKUP_DIR.glob("Caddyfile.old.*"),
                 key=lambda p: p.stat().st_mtime,
                 reverse=True,
-            )
+            )[:10]
         ]
 
         data = json.dumps({"backups": backups}).encode()
