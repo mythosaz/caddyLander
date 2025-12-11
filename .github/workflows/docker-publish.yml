@@ -37,7 +37,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       #
-      # TAG COMPUTATION — unchanged except for indentation fix
+      # TAG COMPUTATION — unchanged
       #
       - id: meta
         name: Compute tags
@@ -73,7 +73,21 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       #
-      # BUILD + PUSH
+      # DESCRIPTION / README SYNC METADATA
+      #
+      - name: Generate Docker metadata
+        id: meta2
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/caddylander
+          flavor: latest=true
+          labels: |
+            org.opencontainers.image.title=CaddyLander
+            org.opencontainers.image.description=CaddyLander — JSON-backed wildcard landing page and Caddyfile editor.
+            org.opencontainers.image.source=${{ github.repository }}
+
+      #
+      # BUILD + PUSH with metadata (fixes README sync)
       #
       - name: Build and push image
         uses: docker/build-push-action@v5
@@ -82,3 +96,5 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta2.outputs.labels }}
+          annotations: ${{ steps.meta2.outputs.annotations }}
