@@ -3,13 +3,39 @@
 <head>
   <meta charset="UTF-8">
   <title>Admin</title>
+  <link rel="icon" type="image/png" href="/static/favicon.png">
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <style>
+    :root {
+      --link-color: #8ab4f8;
+      --link-hover-color: #c6e0ff;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --link-color: #0b63c5;
+        --link-hover-color: #094a96;
+      }
+    }
+
     body {
       font-family: system-ui;
       background: #222;
       color: #eee;
       padding: 2rem;
       margin: 0;
+    }
+
+    a {
+      color: var(--link-color);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    a:hover,
+    a:focus {
+      color: var(--link-hover-color);
+      text-decoration: underline;
     }
 
     button {
@@ -118,73 +144,156 @@
       margin-left: 0.5rem;
       font-weight: normal;
     }
+
+    .view-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .view-tabs button {
+      flex: 1;
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1rem;
+    }
+
+    .status-card {
+      background: #333;
+      padding: 1rem;
+      border-radius: 6px;
+      border: 1px solid #444;
+    }
+
+    .status-card h4 {
+      margin-top: 0;
+      margin-bottom: 0.5rem;
+    }
+
+    .muted {
+      color: #aaa;
+      font-size: 0.9rem;
+    }
+
+    .resource-links {
+      margin-top: 0.75rem;
+    }
+
+    .resource-links a {
+      display: inline-block;
+    }
   </style>
 </head>
 <body>
-  <h1>Admin <span class="build-number">build 2025.01</span></h1>
+  <h1>Admin <span class="build-number" id="build-number">build 251211</span></h1>
 
-  <div class="note" id="default-password-note">
-    Default admin password is <code>caddyLander</code>. Set the <code>ADMIN_PASSWORD</code> environment variable to change it.
+  <div class="view-tabs">
+    <button id="tab-editor" class="active" onclick="switchTab('editor')">Editor</button>
+    <button id="tab-status" onclick="switchTab('status')">Status</button>
   </div>
 
-  <div class="panel">
-    <h3>File Editor</h3>
-
-    <div class="file-tabs">
-      <button id="btn-content" onclick="switchFile('content.json')" class="active">content.json</button>
-      <button id="btn-caddyfile" onclick="switchFile('Caddyfile')">Caddyfile</button>
+  <div id="editor-view">
+    <div class="note" id="default-password-note">
+      Default admin password is <code>caddyLander</code>. Set the <code>ADMIN_PASSWORD</code> environment variable to change it.
     </div>
 
-    <details id="schema-help" style="display: none;">
-      <summary>Content Schema Help</summary>
-      <div>
-        <p><strong>Top-level fields (all optional):</strong></p>
-        <ul>
-          <li><code>siteTitle</code> (string) — Landing page heading</li>
-          <li><code>siteSubtitle</code> (string) — Subheading/tagline</li>
-          <li><code>theme</code> (string) — "light", "dark", or "auto" (system preference)</li>
-          <li><code>favicon</code> (string) — Path under /static (e.g., "/static/favicon.ico")</li>
-          <li><code>items</code> (array) — Array of link objects</li>
-        </ul>
-        <p><strong>Link object fields:</strong></p>
-        <ul>
-          <li><code>name</code> (string, required) — Display name</li>
-          <li><code>url</code> (string, required) — Target URL</li>
-          <li><code>desc</code> (string, optional) — Description text</li>
-          <li><code>icon</code> (string, optional) — Emoji or symbol to display</li>
-          <li><code>group</code> (string, optional) — Group header for categorization</li>
-        </ul>
-        <p><em>Note: Schema is backward-compatible. Old files without new fields work fine.</em></p>
+    <div class="panel">
+      <h3>File Editor</h3>
+
+      <div class="file-tabs">
+        <button id="btn-content" onclick="switchFile('content.json')" class="active">content.json</button>
+        <button id="btn-caddyfile" onclick="switchFile('Caddyfile')">Caddyfile</button>
       </div>
-    </details>
 
-    <div class="editor-container">
-      <div id="editor"></div>
+      <details id="schema-help" style="display: none;">
+        <summary>Content Schema Help</summary>
+        <div>
+          <p><strong>Top-level fields (all optional):</strong></p>
+          <ul>
+            <li><code>siteTitle</code> (string) — Landing page heading</li>
+            <li><code>siteSubtitle</code> (string) — Subheading/tagline</li>
+            <li><code>theme</code> (string) — "light", "dark", or "auto" (system preference)</li>
+            <li><code>favicon</code> (string) — Path under /static (e.g., "/static/favicon.ico")</li>
+            <li><code>items</code> (array) — Array of link objects</li>
+          </ul>
+          <p><strong>Link object fields:</strong></p>
+          <ul>
+            <li><code>name</code> (string, required) — Display name</li>
+            <li><code>url</code> (string, required) — Target URL</li>
+            <li><code>desc</code> (string, optional) — Description text</li>
+            <li><code>icon</code> (string, optional) — Emoji or symbol to display</li>
+            <li><code>group</code> (string, optional) — Group header for categorization</li>
+          </ul>
+          <p><em>Note: Schema is backward-compatible. Old files without new fields work fine.</em></p>
+        </div>
+      </details>
+
+      <div class="editor-container">
+        <div id="editor"></div>
+      </div>
+
+      <div class="editor-actions">
+        <button onclick="saveCurrentFile()">Save</button>
+        <button onclick="downloadCurrentFile()">Download</button>
+      </div>
+
+      <div id="content-status" class="status" style="display: none;"></div>
+      <div id="caddyfile-status" class="status" style="display: none;"></div>
     </div>
 
-    <div class="editor-actions">
-      <button onclick="saveCurrentFile()">Save</button>
-      <button onclick="downloadCurrentFile()">Download</button>
+    <div class="panel">
+      <h3 id="backup-title">Content Backups</h3>
+      <div>
+        <label for="backup-select">Select version:</label><br>
+        <select id="backup-select"></select>
+      </div>
+      <button onclick="loadBackupToEditor()">Load into editor</button>
+      <button onclick="restoreBackup()">Restore</button>
+      <div class="status">Last 10 backups are retained.</div>
     </div>
-
-    <div id="content-status" class="status" style="display: none;"></div>
-    <div id="caddyfile-status" class="status" style="display: none;"></div>
   </div>
 
-  <div class="panel">
-    <h3 id="backup-title">Content Backups</h3>
-    <div>
-      <label for="backup-select">Select version:</label><br>
-      <select id="backup-select"></select>
+  <div id="status-view" style="display: none;">
+    <div class="panel">
+      <h3>Instance Status</h3>
+      <div class="status-grid">
+        <div class="status-card">
+          <h4>Build</h4>
+          <div id="status-build">Loading…</div>
+          <div class="resource-links">
+            <a href="https://github.com/mythosaz/caddyLander" target="_blank" rel="noopener">GitHub: mythosaz/caddyLander</a>
+          </div>
+        </div>
+        <div class="status-card">
+          <h4>Client</h4>
+          <div class="muted">Source IP</div>
+          <div id="status-client-ip">Loading…</div>
+          <div class="muted">Forwarded Chain</div>
+          <div id="status-client-chain">Loading…</div>
+        </div>
+        <div class="status-card">
+          <h4>Server</h4>
+          <div class="muted">Internal IPs</div>
+          <div id="status-server-ip">Loading…</div>
+        </div>
+        <div class="status-card">
+          <h4>Docker</h4>
+          <div class="muted">Detected</div>
+          <div id="status-docker">Loading…</div>
+          <div class="muted">Container</div>
+          <div id="status-container">Loading…</div>
+        </div>
+      </div>
     </div>
-    <button onclick="loadBackupToEditor()">Load into editor</button>
-    <button onclick="restoreBackup()">Restore</button>
-    <div class="status">Last 10 backups are retained.</div>
   </div>
 
   <script src="/static/editor.bundle.js"></script>
   <script>
     let currentFile = 'content.json';
+    let currentTab = 'editor';
 
     // Initialize editor
     document.addEventListener('DOMContentLoaded', () => {
@@ -244,7 +353,48 @@
               note.style.display = "none";
             }
           }
+
+          if (info.buildVersion) {
+            const buildElement = document.getElementById("build-number");
+            if (buildElement) {
+              buildElement.textContent = `build ${info.buildVersion}`;
+            }
+            const statusBuild = document.getElementById("status-build");
+            if (statusBuild) {
+              statusBuild.textContent = info.buildVersion;
+            }
+          }
+
+          if (info.status) {
+            setStatusText("status-client-ip", info.status.clientIp || 'Unavailable');
+            setStatusText("status-client-chain", info.status.clientChain || 'None');
+            setStatusText("status-server-ip", (info.status.serverIps && info.status.serverIps.length)
+              ? info.status.serverIps.join(', ')
+              : 'Unavailable');
+
+            if (info.status.docker) {
+              setStatusText("status-docker", info.status.docker.detected ? 'Yes' : 'No');
+              setStatusText("status-container", info.status.docker.containerId || 'n/a');
+            }
+          }
         });
+    }
+
+    function switchTab(tab) {
+      currentTab = tab;
+      const isEditor = tab === 'editor';
+      document.getElementById('editor-view').style.display = isEditor ? 'block' : 'none';
+      document.getElementById('status-view').style.display = isEditor ? 'none' : 'block';
+
+      document.getElementById('tab-editor').classList.toggle('active', isEditor);
+      document.getElementById('tab-status').classList.toggle('active', !isEditor);
+    }
+
+    function setStatusText(id, value) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.textContent = value;
+      }
     }
 
     function refreshBackups() {
