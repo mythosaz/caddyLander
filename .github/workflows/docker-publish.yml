@@ -36,6 +36,15 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Sync Docker Hub README
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ secrets.DOCKERHUB_USERNAME }}/caddylander
+          readme-filepath: README.md
+          short-description: "CaddyLander — JSON-backed wildcard landing page and Caddyfile editor."
+
       #
       # TAG COMPUTATION — unchanged
       #

@@ -6,7 +6,6 @@ import shutil
 import subprocess
 import logging
 import socket
-import re
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -202,7 +201,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "clientIp": forwarded_for.split(",")[0].strip() if forwarded_for else client_ip,
             "clientChain": forwarded_for,
             "serverIps": internal_ips,
-            "caddyIp": self._get_caddy_ip(),
             "docker": self._get_docker_info(),
         }
 
@@ -227,26 +225,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             pass
 
         return []
-
-    def _get_caddy_ip(self) -> str | None:
-        if not CADDYFILE_PATH.exists():
-            return None
-
-        try:
-            content = CADDYFILE_PATH.read_text(encoding="utf-8")
-        except Exception:
-            return None
-
-        for line in content.splitlines():
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-
-            match = re.search(r"(?P<ip>\b\d{1,3}(?:\.\d{1,3}){3}\b)(?::\d+)?", stripped)
-            if match:
-                return match.group("ip")
-
-        return None
 
     def _get_docker_info(self) -> dict:
         is_docker = Path("/.dockerenv").exists()
@@ -610,7 +588,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    print(LOGO)
+    LOGGER.info("\n%s", LOGO)
     LOGGER.info("Starting caddyLander")
     bootstrap_content()
     server = http.server.ThreadingHTTPServer(("0.0.0.0", 8080), Handler)

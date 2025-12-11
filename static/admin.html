@@ -6,12 +6,36 @@
   <link rel="icon" type="image/png" href="/static/favicon.png">
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <style>
+    :root {
+      --link-color: #8ab4f8;
+      --link-hover-color: #c6e0ff;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --link-color: #0b63c5;
+        --link-hover-color: #094a96;
+      }
+    }
+
     body {
       font-family: system-ui;
       background: #222;
       color: #eee;
       padding: 2rem;
       margin: 0;
+    }
+
+    a {
+      color: var(--link-color);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    a:hover,
+    a:focus {
+      color: var(--link-hover-color);
+      text-decoration: underline;
     }
 
     button {
@@ -153,6 +177,14 @@
       color: #aaa;
       font-size: 0.9rem;
     }
+
+    .resource-links {
+      margin-top: 0.75rem;
+    }
+
+    .resource-links a {
+      display: inline-block;
+    }
   </style>
 </head>
 <body>
@@ -231,6 +263,9 @@
         <div class="status-card">
           <h4>Build</h4>
           <div id="status-build">Loading…</div>
+          <div class="resource-links">
+            <a href="https://github.com/mythosaz/caddyLander" target="_blank" rel="noopener">GitHub: mythosaz/caddyLander</a>
+          </div>
         </div>
         <div class="status-card">
           <h4>Client</h4>
@@ -243,8 +278,6 @@
           <h4>Server</h4>
           <div class="muted">Internal IPs</div>
           <div id="status-server-ip">Loading…</div>
-          <div class="muted">Caddyfile Address</div>
-          <div id="status-caddy-ip">Loading…</div>
         </div>
         <div class="status-card">
           <h4>Docker</h4>
@@ -254,7 +287,6 @@
           <div id="status-container">Loading…</div>
         </div>
       </div>
-      <p class="muted">GitHub: <a href="https://github.com/mythosaz/caddyLander" target="_blank">mythosaz/caddyLander</a></p>
     </div>
   </div>
 
@@ -339,7 +371,6 @@
             setStatusText("status-server-ip", (info.status.serverIps && info.status.serverIps.length)
               ? info.status.serverIps.join(', ')
               : 'Unavailable');
-            setStatusText("status-caddy-ip", info.status.caddyIp || 'Not found');
 
             if (info.status.docker) {
               setStatusText("status-docker", info.status.docker.detected ? 'Yes' : 'No');
