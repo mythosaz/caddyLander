@@ -5,6 +5,8 @@ import os
 import shutil
 import subprocess
 import logging
+import socket
+import re
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -43,6 +45,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
 LOGGER = logging.getLogger("caddylander")
+BUILD_VERSION = datetime.now().strftime("%y%m%d")
 
 
 def bootstrap_content() -> None:
@@ -175,13 +178,97 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return False
 
     def _serve_admin_info(self):
-        info = {"defaultPassword": ADMIN_PASSWORD == DEFAULT_ADMIN_PASSWORD}
+        info = {
+            "defaultPassword": ADMIN_PASSWORD == DEFAULT_ADMIN_PASSWORD,
+            "buildVersion": BUILD_VERSION,
+            "status": self._collect_status(),
+            "links": {
+                "github": "https://github.com/mythosaz/caddyLander"
+            },
+        }
         data = json.dumps(info).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+    def _collect_status(self) -> dict:
+        forwarded_for = self.headers.get("X-Forwarded-For")
+        client_ip = self.client_address[0] if self.client_address else None
+        internal_ips = self._get_internal_ips()
+
+        return {
+            "clientIp": forwarded_for.split(",")[0].strip() if forwarded_for else client_ip,
+            "clientChain": forwarded_for,
+            "serverIps": internal_ips,
+            "caddyIp": self._get_caddy_ip(),
+            "docker": self._get_docker_info(),
+        }
+
+    def _get_internal_ips(self) -> list[str]:
+        try:
+            result = subprocess.run([
+                "hostname",
+                "-I",
+            ], capture_output=True, text=True, check=False)
+            output = result.stdout.strip()
+            if output:
+                return [ip for ip in output.split() if ip]
+        except Exception:
+            pass
+
+        try:
+            hostname = socket.gethostname()
+            ip = socket.gethostbyname(hostname)
+            if ip:
+                return [ip]
+        except Exception:
+            pass
+
+        return []
+
+    def _get_caddy_ip(self) -> str | None:
+        if not CADDYFILE_PATH.exists():
+            return None
+
+        try:
+            content = CADDYFILE_PATH.read_text(encoding="utf-8")
+        except Exception:
+            return None
+
+        for line in content.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+
+            match = re.search(r"(?P<ip>\b\d{1,3}(?:\.\d{1,3}){3}\b)(?::\d+)?", stripped)
+            if match:
+                return match.group("ip")
+
+        return None
+
+    def _get_docker_info(self) -> dict:
+        is_docker = Path("/.dockerenv").exists()
+        container_id = None
+
+        try:
+            cgroup_path = Path("/proc/self/cgroup")
+            if cgroup_path.exists():
+                for line in cgroup_path.read_text().splitlines():
+                    parts = line.split("/")
+                    if parts:
+                        candidate = parts[-1]
+                        if len(candidate) >= 12:
+                            container_id = candidate[-12:]
+                            break
+        except Exception:
+            pass
+
+        return {
+            "detected": is_docker,
+            "containerId": container_id,
+        }
 
     def _serve_caddyfile(self):
         content = ""
