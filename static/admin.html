@@ -345,6 +345,13 @@
       </div>
       <div id="favicon-status" class="status" style="display: none;"></div>
     </div>
+
+    <div class="panel">
+      <h3>Backup</h3>
+      <p class="muted">Download a single archive that includes the active content.json, Caddyfile, favicons, and all available backups.</p>
+      <button onclick="downloadFullBackup()">Download full backup (.tar.gz)</button>
+      <div id="full-backup-status" class="status" style="display: none;"></div>
+    </div>
   </div>
 
   <div id="status-view" style="display: none;">
@@ -690,6 +697,44 @@
       } catch (err) {
         console.error(err);
         setFaviconStatus('Restore failed.');
+      }
+    }
+
+    async function downloadFullBackup() {
+      const status = document.getElementById('full-backup-status');
+      if (status) {
+        status.textContent = '';
+        status.style.display = 'none';
+      }
+
+      try {
+        const response = await fetch('/api/admin/full-backup');
+        if (!response.ok) throw new Error('Failed');
+
+        const blob = await response.blob();
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
+        const filename = filenameMatch?.[1] || 'caddylander-backup.tar.gz';
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        if (status) {
+          status.textContent = 'Backup generated and download started.';
+          status.style.display = 'block';
+        }
+      } catch (err) {
+        console.error(err);
+        if (status) {
+          status.textContent = 'Unable to create backup. Please try again.';
+          status.style.display = 'block';
+        }
       }
     }
   </script>
