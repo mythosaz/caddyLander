@@ -47,6 +47,16 @@
       transition: background-color 0.2s ease, color 0.2s ease;
     }
 
+    #controls {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      z-index: 10;
+    }
+
     a {
       color: var(--link-color);
       text-decoration: none;
@@ -216,17 +226,6 @@
       display: inline-block;
     }
 
-    .theme-toggle {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin-left: 1rem;
-    }
-
-    .theme-toggle button {
-      margin: 0;
-    }
-
     .upload-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -250,11 +249,12 @@
   </style>
 </head>
 <body>
-  <h1>Admin <span class="build-number" id="build-number">build 251211</span>
-    <span class="theme-toggle">
-      <button id="theme-toggle" onclick="toggleTheme()">Toggle theme</button>
-    </span>
-  </h1>
+  <div id="controls">
+    <a id="return" href="/" title="Return to landing">↩️</a>
+    <button id="theme-toggle" onclick="toggleTheme()">Toggle theme</button>
+  </div>
+
+  <h1>Admin <span class="build-number" id="build-number">build 251211</span></h1>
 
   <div class="view-tabs">
     <button id="tab-editor" class="active" onclick="switchTab('editor')">Editor</button>
