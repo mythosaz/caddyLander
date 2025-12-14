@@ -1,11 +1,13 @@
 import base64
 import http.server
+import io
 import json
+import logging
 import os
 import shutil
-import subprocess
-import logging
 import socket
+import subprocess
+import tarfile
 import unicodedata
 from datetime import datetime
 from pathlib import Path
@@ -114,6 +116,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not self._require_auth():
                 return
             return self._serve_caddyfile_backup(parsed)
+        if parsed.path == "/api/admin/full-backup":
+            if not self._require_auth():
+                return
+            return self._serve_full_backup()
         if parsed.path == "/favicon.png":
             return self._serve_file(STATIC_DIR / "favicon.png", "image/png")
         if parsed.path == "/favicon.svg":
@@ -548,6 +554,39 @@ class Handler(http.server.BaseHTTPRequestHandler):
         data = json.dumps({"backups": backups}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _serve_full_backup(self):
+        buffer = io.BytesIO()
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        filename = f"caddylander-backup-{timestamp}.tar.gz"
+
+        with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
+            if RUNTIME_CONTENT.exists():
+                tar.add(RUNTIME_CONTENT, arcname="content.json")
+
+            if CADDYFILE_PATH.exists():
+                tar.add(CADDYFILE_PATH, arcname="Caddyfile")
+
+            for name in ["favicon.svg", "favicon.ico", "favicon.png"]:
+                runtime_path = RUNTIME_STATIC / name
+                static_path = STATIC_DIR / name
+                target = runtime_path if runtime_path.exists() else static_path
+                if target.exists():
+                    tar.add(target, arcname=f"favicons/{name}")
+
+            for backup in sorted(CONTENT_BACKUP_DIR.glob("content.json.old.*")):
+                tar.add(backup, arcname=f"content-backups/{backup.name}")
+
+            for backup in sorted(BACKUP_DIR.glob("Caddyfile.old.*")):
+                tar.add(backup, arcname=f"caddyfile-backups/{backup.name}")
+
+        data = buffer.getvalue()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/gzip")
+        self.send_header("Content-Disposition", f"attachment; filename=\"{filename}\"")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
