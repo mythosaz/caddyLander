@@ -193,6 +193,7 @@ function updateStatus(fileName, message) {
   const statusElement = document.getElementById(statusId);
   if (statusElement) {
     statusElement.textContent = message;
+    statusElement.style.display = message ? 'block' : 'none';
   }
 }
 
