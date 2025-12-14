@@ -33,13 +33,14 @@ At its core, caddyLander gives you a **single secure web surface** for both your
 
 Admin Portal:
 
-<img width="1345" height="1451" alt="image" src="https://github.com/user-attachments/assets/3af88fda-eeb8-4dbb-9a9e-56639db1b4f2" />
+<img width="1234" height="1745" alt="image" src="https://github.com/user-attachments/assets/57c65fd2-26d4-4f34-a7d8-1cbd8a6df4c9" />
+
 
 ---
 
 A user-configured landing page:
 
-<img width="1443" height="871" alt="image" src="https://github.com/user-attachments/assets/c35933d4-f422-475c-8380-13df42f59780" />
+<img width="1243" height="1312" alt="image" src="https://github.com/user-attachments/assets/a69954dd-8970-4f33-8f76-137a7c26cbe2" />
 
 
 ---
