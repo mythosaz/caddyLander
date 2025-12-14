@@ -17,6 +17,38 @@ const languageConf = new Compartment();
 // Create editor instance
 let editorView = null;
 let currentFile = null;
+const fileState = new Map();
+
+function getOrCreateFileState(fileName) {
+  if (!fileState.has(fileName)) {
+    fileState.set(fileName, {
+      lastSaved: '',
+      isDirty: false,
+      position: { line: 1, column: 1 }
+    });
+  }
+  return fileState.get(fileName);
+}
+
+function setStatusLine(fileName) {
+  const statusId = fileName === 'content.json' ? 'content-editor-status' : 'caddyfile-editor-status';
+  const otherId = fileName === 'content.json' ? 'caddyfile-editor-status' : 'content-editor-status';
+  const active = document.getElementById(statusId);
+  const inactive = document.getElementById(otherId);
+
+  if (active) active.style.display = 'flex';
+  if (inactive) inactive.style.display = 'none';
+}
+
+function updateEditorStatusLine(fileName) {
+  const status = getOrCreateFileState(fileName);
+  const statusId = fileName === 'content.json' ? 'content-editor-status' : 'caddyfile-editor-status';
+  const statusEl = document.getElementById(statusId);
+
+  if (!statusEl) return;
+
+  statusEl.textContent = `${fileName} · ${status.isDirty ? 'Dirty' : 'Saved'} · Ln ${status.position.line}, Col ${status.position.column}`;
+}
 
 // File type configurations
 const fileTypes = {
@@ -42,6 +74,24 @@ function initEditor(element) {
   const startState = EditorState.create({
     doc: '',
     extensions: [
+      EditorView.updateListener.of((update) => {
+        const fileState = getOrCreateFileState(currentFile || 'content.json');
+
+        if (update.selectionSet) {
+          const line = update.state.doc.lineAt(update.state.selection.main.head);
+          fileState.position = {
+            line: line.number,
+            column: update.state.selection.main.head - line.from + 1
+          };
+          updateEditorStatusLine(currentFile || 'content.json');
+        }
+
+        if (update.docChanged) {
+          const content = update.state.doc.toString();
+          fileState.isDirty = content !== fileState.lastSaved;
+          updateEditorStatusLine(currentFile || 'content.json');
+        }
+      }),
       lineNumbers(),
       highlightActiveLineGutter(),
       highlightSpecialChars(),
@@ -89,6 +139,7 @@ async function loadFile(fileName) {
 
   currentFile = fileName;
   const config = fileTypes[fileName];
+  const state = getOrCreateFileState(fileName);
 
   try {
     const response = await fetch(config.endpoint.get);
@@ -102,6 +153,8 @@ async function loadFile(fileName) {
     }
 
     // Update editor content and language
+    state.lastSaved = content;
+    state.isDirty = false;
     editorView.dispatch({
       changes: {
         from: 0,
@@ -110,6 +163,11 @@ async function loadFile(fileName) {
       },
       effects: languageConf.reconfigure(config.extension)
     });
+
+    const cursorLine = editorView.state.doc.lineAt(editorView.state.selection.main.head);
+    state.position = { line: cursorLine.number, column: editorView.state.selection.main.head - cursorLine.from + 1 };
+    setStatusLine(fileName);
+    updateEditorStatusLine(fileName);
 
     updateStatus(fileName, '');
   } catch (error) {
@@ -181,6 +239,11 @@ async function saveFile() {
     // Refresh backups
     if (window.refreshBackups) window.refreshBackups();
     if (window.refreshCaddyfileBackups) window.refreshCaddyfileBackups();
+
+    const state = getOrCreateFileState(currentFile);
+    state.lastSaved = content;
+    state.isDirty = false;
+    updateEditorStatusLine(currentFile);
 
   } catch (error) {
     console.error('Error saving file:', error);
