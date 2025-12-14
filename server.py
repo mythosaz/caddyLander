@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import logging
 import socket
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -26,21 +27,29 @@ CADDY_BIN = Path("/app/vendor/caddy/caddy")
 DEFAULT_ADMIN_PASSWORD = "caddyLander"
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
 
-LOGO = "\n".join(
-    [
-        "                       █████     █████            █████                                █████",
-        "                       ░░███     ░░███            ░░███                                ░░███",
-        "  ██████   ██████    ███████   ███████  █████ ████ ░███         ██████   ████████    ███████   ██████  ████████",
-        " ███░░███ ░░░░░███  ███░░███  ███░░███ ░░███ ░███  ░███        ░░░░░███ ░░███░░███  ███░░███  ███░░███░░███░░███",
-        "░███ ░░░   ███████ ░███ ░███ ░███ ░███  ░███ ░███  ░███         ███████  ░███ ░███ ░███ ░███ ░███████  ░███ ░░░",
-        "░███  ███ ███░░███ ░███ ░███ ░███ ░███  ░███ ░███  ░███      █ ███░░███  ░███ ░███ ░███ ░███ ░███░░░   ░███",
-        "░░██████ ░░████████░░████████░░████████ ░░███████  ███████████░░████████ ████ █████░░████████░░██████  █████",
-        " ░░░░░░   ░░░░░░░░  ░░░░░░░░  ░░░░░░░░   ░░░░░███ ░░░░░░░░░░░  ░░░░░░░░ ░░░░ ░░░░░  ░░░░░░░░  ░░░░░░  ░░░░░",
-        "                                         ███ ░███",
-        "                                        ░░██████",
-        "                                         ░░░░░░",
+LOGO_LINES = [
+    "                       █████     █████            █████                                █████",
+    "                       ░░███     ░░███            ░░███                                ░░███",
+    "  ██████   ██████    ███████   ███████  █████ ████ ░███         ██████   ████████    ███████   ██████  ████████",
+    " ███░░███ ░░░░░███  ███░░███  ███░░███ ░░███ ░███  ░███        ░░░░░███ ░░███░░███  ███░░███  ███░░███░░███░███",
+    "░███ ░░░   ███████ ░███ ░███ ░███ ░███  ░███ ░███  ░███         ███████  ░███ ░███ ░███ ░███ ░███████  ░███ ░░░",
+    "░███  ███ ███░░███ ░███ ░███ ░███ ░███  ░███ ░███  ░███      █ ███░░███  ░███ ░███ ░███ ░███ ░███░░░   ░███",
+    "░░██████ ░░████████░░████████░░████████ ░░███████  ███████████░░████████ ████ █████░░████████░░██████  █████",
+    " ░░░░░░   ░░░░░░░░  ░░░░░░░░  ░░░░░░░░   ░░░░░███ ░░░░░░░░░░░  ░░░░░░░░ ░░░░ ░░░░░  ░░░░░░░░  ░░░░░░  ░░░░░",
+    "                                         ███ ░███",
+    "                                        ░░██████",
+    "                                         ░░░░░░",
+]
+LOGO = "\n".join(LOGO_LINES)
+
+
+def _sanitize_logo_lines(lines: list[str]) -> list[str]:
+    """Remove control characters from the logo while keeping formatting intact."""
+
+    return [
+        "".join(ch for ch in line if unicodedata.category(ch)[0] != "C")
+        for line in lines
     ]
-)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -786,10 +795,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    safe_logo = "\n".join(
-        line for line in LOGO.splitlines() if all(ord(ch) >= 32 or ch in {"\n", "\t", " "} for ch in line)
-    )
-    LOGGER.info("\n%s", safe_logo)
+    for line in _sanitize_logo_lines(LOGO_LINES):
+        LOGGER.info(line)
     LOGGER.info("Starting caddyLander")
     bootstrap_content()
     server = http.server.ThreadingHTTPServer(("0.0.0.0", 8080), Handler)
