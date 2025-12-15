@@ -1,11 +1,14 @@
 import base64
 import http.server
+import io
 import json
+import logging
 import os
 import shutil
-import subprocess
-import logging
 import socket
+import subprocess
+import tarfile
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -19,25 +22,36 @@ CONFIG_BASE = Path("/config")
 CADDYFILE_PATH = CONFIG_BASE / "Caddyfile"
 BACKUP_DIR = CONFIG_BASE / "backup"
 CONTENT_BACKUP_DIR = CONFIG_BASE / "content-backup"
+RUNTIME_STATIC = RUNTIME_BASE / "static"
 TEMP_CADDYFILE = Path("/tmp/caddyfile.upload")
 CADDY_BIN = Path("/app/vendor/caddy/caddy")
 
 DEFAULT_ADMIN_PASSWORD = "caddyLander"
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
 
-LOGO = r"""
-                       █████     █████            █████                                █████
-                       ░░███     ░░███            ░░███                                ░░███
-  ██████   ██████    ███████   ███████  █████ ████ ░███         ██████   ████████    ███████   ██████  ████████
- ███░░███ ░░░░░███  ███░░███  ███░░███ ░░███ ░███  ░███        ░░░░░███ ░░███░░███  ███░░███  ███░░███░░███░░███
-░███ ░░░   ███████ ░███ ░███ ░███ ░███  ░███ ░███  ░███         ███████  ░███ ░███ ░███ ░███ ░███████  ░███ ░░░
-░███  ███ ███░░███ ░███ ░███ ░███ ░███  ░███ ░███  ░███      █ ███░░███  ░███ ░███ ░███ ░███ ░███░░░   ░███
-░░██████ ░░████████░░████████░░████████ ░░███████  ███████████░░████████ ████ █████░░████████░░██████  █████
- ░░░░░░   ░░░░░░░░  ░░░░░░░░  ░░░░░░░░   ░░░░░███ ░░░░░░░░░░░  ░░░░░░░░ ░░░░ ░░░░░  ░░░░░░░░  ░░░░░░  ░░░░░
-                                         ███ ░███
-                                        ░░██████
-                                         ░░░░░░
-"""
+LOGO_LINES = [
+    "                       █████     █████            █████                                █████",
+    "                       ░░███     ░░███            ░░███                                ░░███",
+    "  ██████   ██████    ███████   ███████  █████ ████ ░███         ██████   ████████    ███████   ██████  ████████",
+    " ███░░███ ░░░░░███  ███░░███  ███░░███ ░░███ ░███  ░███        ░░░░░███ ░░███░░███  ███░░███  ███░░███░░███░███",
+    "░███ ░░░   ███████ ░███ ░███ ░███ ░███  ░███ ░███  ░███         ███████  ░███ ░███ ░███ ░███ ░███████  ░███ ░░░",
+    "░███  ███ ███░░███ ░███ ░███ ░███ ░███  ░███ ░███  ░███      █ ███░░███  ░███ ░███ ░███ ░███ ░███░░░   ░███",
+    "░░██████ ░░████████░░████████░░████████ ░░███████  ███████████░░████████ ████ █████░░████████░░██████  █████",
+    " ░░░░░░   ░░░░░░░░  ░░░░░░░░  ░░░░░░░░   ░░░░░███ ░░░░░░░░░░░  ░░░░░░░░ ░░░░ ░░░░░  ░░░░░░░░  ░░░░░░  ░░░░░",
+    "                                         ███ ░███",
+    "                                        ░░██████",
+    "                                         ░░░░░░",
+]
+LOGO = "\n".join(LOGO_LINES)
+
+
+def _sanitize_logo_lines(lines: list[str]) -> list[str]:
+    """Remove control characters from the logo while keeping formatting intact."""
+
+    return [
+        "".join(ch for ch in line if unicodedata.category(ch)[0] != "C")
+        for line in lines
+    ]
 
 logging.basicConfig(
     level=logging.INFO,
@@ -49,6 +63,7 @@ BUILD_VERSION = datetime.now().strftime("%y%m%d")
 
 def bootstrap_content() -> None:
     RUNTIME_BASE.mkdir(parents=True, exist_ok=True)
+    RUNTIME_STATIC.mkdir(parents=True, exist_ok=True)
     if not RUNTIME_CONTENT.exists():
         shutil.copyfile(TEMPLATE_CONTENT, RUNTIME_CONTENT)
         LOGGER.info("Bootstrapped runtime content from template")
@@ -75,6 +90,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not self._require_auth():
                 return
             return self._serve_admin_info()
+        if parsed.path == "/api/admin/content/generate":
+            if not self._require_auth():
+                return
+            return self._serve_generated_content()
         if parsed.path == "/api/content":
             return self._serve_file(RUNTIME_CONTENT, "application/json")
         if parsed.path == "/admin/caddyfile":
@@ -97,10 +116,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not self._require_auth():
                 return
             return self._serve_caddyfile_backup(parsed)
+        if parsed.path == "/api/admin/full-backup":
+            if not self._require_auth():
+                return
+            return self._serve_full_backup()
         if parsed.path == "/favicon.png":
             return self._serve_file(STATIC_DIR / "favicon.png", "image/png")
         if parsed.path == "/favicon.svg":
-            return self._serve_file(STATIC_DIR / "favicon.svg", "image/svg+xml")
+            return self._serve_favicon("favicon.svg", "image/svg+xml")
+        if parsed.path == "/favicon.ico":
+            return self._serve_favicon("favicon.ico", "image/x-icon")
+        if parsed.path == "/static/favicon.svg":
+            return self._serve_favicon("favicon.svg", "image/svg+xml")
+        if parsed.path == "/static/favicon.ico":
+            return self._serve_favicon("favicon.ico", "image/x-icon")
         # Allow direct access to static assets without the /static prefix (e.g. /favicon.ico)
         static_target = (STATIC_DIR / parsed.path.lstrip("/")).resolve()
         if static_target.is_file() and static_target.is_relative_to(STATIC_DIR.resolve()):
@@ -125,6 +154,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not self._require_auth():
                 return
             return self._handle_content_restore()
+        if parsed.path == "/api/admin/favicon":
+            if not self._require_auth():
+                return
+            return self._handle_favicon_upload(parsed)
+        if parsed.path == "/api/admin/favicon/restore":
+            if not self._require_auth():
+                return
+            return self._handle_favicon_restore(parsed)
         if parsed.path == "/api/admin/caddyfile/restore":
             if not self._require_auth():
                 return
@@ -155,6 +192,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path.suffix == ".svg":
             return "image/svg+xml"
         return "application/octet-stream"
+
+    def _serve_favicon(self, name: str, mime: str):
+        runtime_candidate = RUNTIME_STATIC / name
+        target = runtime_candidate if runtime_candidate.exists() else STATIC_DIR / name
+        return self._serve_file(target, mime)
 
     def _require_auth(self) -> bool:
         if not ADMIN_PASSWORD:
@@ -294,6 +336,49 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(response)))
         self.end_headers()
         self.wfile.write(response)
+
+    def _serve_generated_content(self):
+        if not CADDYFILE_PATH.exists():
+            self.send_error(404, "Caddyfile not found")
+            return
+
+        caddy_text = CADDYFILE_PATH.read_text(encoding="utf-8")
+        hosts = self._parse_caddy_hosts(caddy_text)
+
+        if not hosts:
+            self.send_error(400, "No hostnames discovered in Caddyfile")
+            return
+
+        template = {}
+        try:
+            template = json.loads(TEMPLATE_CONTENT.read_text(encoding="utf-8"))
+        except Exception:
+            LOGGER.warning("Failed to load template content")
+
+        defaults = {k: v for k, v in template.items() if k != "items"}
+        generated_items = [
+            {
+                "name": display,
+                "url": url,
+                "desc": "Discovered from Caddyfile",
+            }
+            for display, url in hosts
+        ]
+
+        fallback_items = [
+            item
+            for item in template.get("items", [])
+            if "caddyLander" in item.get("url", "") or "caddyserver" in item.get("url", "")
+        ]
+
+        payload = {**defaults, "items": generated_items + fallback_items}
+
+        data = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
     def _handle_caddyfile_update(self):
         raw_body = read_body(self)
@@ -473,6 +558,39 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _serve_full_backup(self):
+        buffer = io.BytesIO()
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        filename = f"caddylander-backup-{timestamp}.tar.gz"
+
+        with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
+            if RUNTIME_CONTENT.exists():
+                tar.add(RUNTIME_CONTENT, arcname="content.json")
+
+            if CADDYFILE_PATH.exists():
+                tar.add(CADDYFILE_PATH, arcname="Caddyfile")
+
+            for name in ["favicon.svg", "favicon.ico", "favicon.png"]:
+                runtime_path = RUNTIME_STATIC / name
+                static_path = STATIC_DIR / name
+                target = runtime_path if runtime_path.exists() else static_path
+                if target.exists():
+                    tar.add(target, arcname=f"favicons/{name}")
+
+            for backup in sorted(CONTENT_BACKUP_DIR.glob("content.json.old.*")):
+                tar.add(backup, arcname=f"content-backups/{backup.name}")
+
+            for backup in sorted(BACKUP_DIR.glob("Caddyfile.old.*")):
+                tar.add(backup, arcname=f"caddyfile-backups/{backup.name}")
+
+        data = buffer.getvalue()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/gzip")
+        self.send_header("Content-Disposition", f"attachment; filename=\"{filename}\"")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
     def _serve_content_backup(self, parsed_url):
         params = parse_qs(parsed_url.query)
         name = params.get("name", [None])[0]
@@ -491,6 +609,66 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+    def _handle_favicon_upload(self, parsed_url):
+        params = parse_qs(parsed_url.query)
+        target_type = params.get("type", [None])[0]
+        if target_type not in {"svg", "ico"}:
+            self.send_error(400, "Specify type=svg or type=ico")
+            return
+
+        raw_body = read_body(self)
+        if not raw_body:
+            self.send_error(400, "Missing favicon payload")
+            return
+
+        if target_type == "svg":
+            if b"<svg" not in raw_body.lower():
+                self.send_error(400, "Only SVG content is allowed")
+                return
+        if target_type == "ico":
+            if len(raw_body) < 4 or raw_body[:4] != b"\x00\x00\x01\x00":
+                self.send_error(400, "Only ICO content is allowed")
+                return
+
+        RUNTIME_STATIC.mkdir(parents=True, exist_ok=True)
+        target_path = RUNTIME_STATIC / f"favicon.{target_type}"
+        target_path.write_bytes(raw_body)
+
+        LOGGER.info("Uploaded custom favicon: %s", target_path)
+
+        response = json.dumps({"status": "ok"}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(response)))
+        self.end_headers()
+        self.wfile.write(response)
+
+    def _handle_favicon_restore(self, parsed_url):
+        params = parse_qs(parsed_url.query)
+        target_type = params.get("type", [None])[0]
+
+        targets = []
+        if target_type in {"svg", "ico"}:
+            targets.append(RUNTIME_STATIC / f"favicon.{target_type}")
+        else:
+            targets.extend([RUNTIME_STATIC / "favicon.svg", RUNTIME_STATIC / "favicon.ico"])
+
+        removed_any = False
+        for path in targets:
+            if path.exists():
+                path.unlink(missing_ok=True)
+                removed_any = True
+
+        if removed_any:
+            LOGGER.info("Restored bundled favicon assets")
+
+        response = json.dumps({"status": "ok"}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(response)))
+        self.end_headers()
+        self.wfile.write(response)
 
     def _backup_caddyfile(self, previous_content: str):
         BACKUP_DIR.mkdir(parents=True, exist_ok=True)
@@ -586,9 +764,78 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(response)
 
+    def _parse_caddy_hosts(self, text: str) -> list[tuple[str, str]]:
+        hosts: list[str] = []
+        tokens: list[str] = []
+        brace_depth = 0
+
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "#" in line:
+                line = line.split("#", 1)[0].strip()
+            if not line:
+                continue
+
+            if brace_depth == 0:
+                if "{" in line:
+                    before, after = line.split("{", 1)
+                    tokens.extend(before.replace(",", " ").split())
+                    brace_depth += 1 + after.count("{")
+                    brace_depth -= after.count("}")
+                    hosts.extend(tokens)
+                    tokens = []
+                    continue
+
+                tokens.extend(line.replace(",", " ").split())
+            brace_depth += line.count("{")
+            brace_depth -= line.count("}")
+            if brace_depth < 0:
+                brace_depth = 0
+
+        cleaned: list[tuple[str, str]] = []
+        seen = set()
+
+        for token in hosts:
+            candidate = token.strip().strip(",")
+            if not candidate or candidate in {"import", "handle", "route"}:
+                continue
+            if candidate.startswith(("(", "@", ":", "/")):
+                continue
+            if candidate.startswith("unix/"):
+                continue
+
+            url = candidate
+            if "://" in candidate:
+                parsed = urlparse(candidate)
+                display = parsed.hostname or candidate
+                url = candidate
+            else:
+                display = candidate
+                if candidate.startswith("*."):
+                    display = candidate.removeprefix("*.")
+                display = display.lstrip("*")
+                port = None
+                if ":" in display:
+                    host_only, port = display.split(":", 1)
+                    display = host_only
+                scheme = "https"
+                if candidate.startswith("http") or port == "80":
+                    scheme = "http"
+                url = f"{scheme}://{display}"
+
+            key = (display, url)
+            if display and key not in seen:
+                cleaned.append(key)
+                seen.add(key)
+
+        return cleaned
+
 
 if __name__ == "__main__":
-    LOGGER.info("\n%s", LOGO)
+    for line in _sanitize_logo_lines(LOGO_LINES):
+        LOGGER.info(line)
     LOGGER.info("Starting caddyLander")
     bootstrap_content()
     server = http.server.ThreadingHTTPServer(("0.0.0.0", 8080), Handler)

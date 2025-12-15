@@ -28,6 +28,28 @@
       transition: background-color 0.3s, color 0.3s;
     }
 
+    #controls {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    #theme-toggle {
+      padding: 0.35rem 0.6rem;
+      background: transparent;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      color: var(--text-color);
+      cursor: pointer;
+    }
+
+    #theme-toggle:hover {
+      background: var(--border-color);
+    }
+
     .item {
       margin-bottom: 1rem;
     }
@@ -42,9 +64,6 @@
     }
 
     #admin {
-      position: fixed;
-      top: 10px;
-      right: 10px;
       font-size: 24px;
     }
 
@@ -78,16 +97,57 @@
   </style>
 </head>
 <body>
-  <a id="admin" href="/admin">🔒</a>
+  <div id="controls">
+    <a id="admin" href="/admin">🔒</a>
+    <button id="theme-toggle" onclick="cycleTheme()">Toggle</button>
+  </div>
 
   <h1 id="site-title">Services</h1>
   <div id="site-subtitle" class="subtitle"></div>
   <div id="content"></div>
 
   <script>
+    const LANDING_THEME_KEY = 'landingTheme';
+    const mediaQuery = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)');
+
+    if (mediaQuery && mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', () => {
+        if ((localStorage.getItem(LANDING_THEME_KEY) || 'auto') === 'auto') {
+          applyThemePreference('auto');
+        }
+      });
+    }
+
+    function applyThemePreference(preference) {
+      const stored = preference || localStorage.getItem(LANDING_THEME_KEY) || 'auto';
+      const resolved = stored === 'auto'
+        ? (mediaQuery && mediaQuery.matches ? 'light' : 'dark')
+        : stored;
+
+      document.documentElement.setAttribute('data-theme', resolved === 'light' ? 'light' : 'dark');
+      localStorage.setItem(LANDING_THEME_KEY, stored);
+
+      const button = document.getElementById('theme-toggle');
+      if (button) {
+        const label = stored === 'auto' ? 'Auto' : (resolved === 'light' ? 'Light' : 'Dark');
+        button.textContent = `Theme: ${label}`;
+      }
+    }
+
+    function cycleTheme() {
+      const current = localStorage.getItem(LANDING_THEME_KEY) || 'auto';
+      const next = current === 'dark' ? 'light' : current === 'light' ? 'auto' : 'dark';
+      applyThemePreference(next);
+    }
+
+    applyThemePreference(localStorage.getItem(LANDING_THEME_KEY) || 'auto');
+
     fetch("/api/content")
       .then(r => r.json())
       .then(data => {
+        const preferredTheme = localStorage.getItem(LANDING_THEME_KEY) || data.theme || 'dark';
+        applyThemePreference(preferredTheme);
+
         // Apply site title
         if (data.siteTitle) {
           document.getElementById("site-title").textContent = data.siteTitle;
@@ -97,17 +157,6 @@
         // Apply site subtitle
         if (data.siteSubtitle) {
           document.getElementById("site-subtitle").textContent = data.siteSubtitle;
-        }
-
-        // Apply theme
-        const theme = data.theme || "dark";
-        if (theme === "auto") {
-          // Use system preference
-          if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
-            document.documentElement.setAttribute('data-theme', 'light');
-          }
-        } else if (theme === "light") {
-          document.documentElement.setAttribute('data-theme', 'light');
         }
 
         // Apply favicon

@@ -7,23 +7,54 @@
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <style>
     :root {
+      --bg: #111;
+      --text: #eee;
+      --panel: #333;
+      --border: #444;
+      --button: #444;
+      --button-hover: #555;
+      --button-active: #0b63c5;
+      --muted: #aaa;
+      --status: #333;
       --link-color: #8ab4f8;
       --link-hover-color: #c6e0ff;
+      --input-bg: #333;
+      --input-border: #666;
     }
 
-    @media (prefers-color-scheme: light) {
-      :root {
-        --link-color: #0b63c5;
-        --link-hover-color: #094a96;
-      }
+    [data-theme="light"] {
+      --bg: #f5f5f5;
+      --text: #111;
+      --panel: #ffffff;
+      --border: #ccc;
+      --button: #e5e7eb;
+      --button-hover: #d1d5db;
+      --button-active: #2563eb;
+      --muted: #555;
+      --status: #f3f4f6;
+      --link-color: #0b63c5;
+      --link-hover-color: #094a96;
+      --input-bg: #fff;
+      --input-border: #cbd5e1;
     }
 
     body {
       font-family: system-ui;
-      background: #222;
-      color: #eee;
+      background: var(--bg);
+      color: var(--text);
       padding: 2rem;
       margin: 0;
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+
+    #controls {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      z-index: 10;
     }
 
     a {
@@ -41,33 +72,40 @@
     button {
       padding: 0.5rem 1.2rem;
       margin: 0.25rem;
-      background: #444;
-      color: #eee;
-      border: 1px solid #666;
+      background: var(--button);
+      color: var(--text);
+      border: 1px solid var(--border);
       border-radius: 4px;
       cursor: pointer;
+      transition: background-color 0.15s ease, border-color 0.15s ease;
     }
 
     button:hover {
-      background: #555;
+      background: var(--button-hover);
     }
 
     button.active {
-      background: #0066cc;
-      border-color: #0066cc;
+      background: var(--button-active);
+      border-color: var(--button-active);
+      color: #fff;
     }
 
-    select {
+    select,
+    input[type="file"] {
       margin: 0.5rem 0;
       padding: 0.5rem;
-      background: #333;
-      color: #eee;
-      border: 1px solid #666;
+      background: var(--input-bg);
+      color: var(--text);
+      border: 1px solid var(--input-border);
       border-radius: 4px;
     }
 
     .panel {
       margin-bottom: 2rem;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
     }
 
     .status {
@@ -75,11 +113,11 @@
       font-weight: bold;
       padding: 0.5rem;
       border-radius: 4px;
-      background: #333;
+      background: var(--status);
     }
 
     .note {
-      background: #333;
+      background: var(--status);
       padding: 0.75rem;
       border-radius: 6px;
       margin-bottom: 1rem;
@@ -96,15 +134,30 @@
     }
 
     .editor-container {
-      border: 1px solid #444;
+      border: 1px solid var(--border);
       border-radius: 6px;
       overflow: hidden;
       margin-bottom: 1rem;
       background: #282c34;
     }
 
+    .editor-status-line {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.9rem;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--status);
+      margin-top: -0.5rem;
+      margin-bottom: 1rem;
+    }
+
     .editor-actions {
       display: flex;
+      flex-wrap: wrap;
       gap: 0.5rem;
       margin-bottom: 1rem;
     }
@@ -117,8 +170,9 @@
     details {
       margin: 1rem 0;
       padding: 0.75rem;
-      background: #333;
+      background: var(--panel);
       border-radius: 6px;
+      border: 1px solid var(--border);
     }
 
     summary {
@@ -133,13 +187,13 @@
     }
 
     code {
-      background: #444;
+      background: var(--status);
       padding: 0.2rem 0.4rem;
       border-radius: 3px;
     }
 
     .build-number {
-      color: #888;
+      color: var(--muted);
       font-size: 0.7rem;
       margin-left: 0.5rem;
       font-weight: normal;
@@ -162,10 +216,10 @@
     }
 
     .status-card {
-      background: #333;
+      background: var(--panel);
       padding: 1rem;
       border-radius: 6px;
-      border: 1px solid #444;
+      border: 1px solid var(--border);
     }
 
     .status-card h4 {
@@ -174,7 +228,7 @@
     }
 
     .muted {
-      color: #aaa;
+      color: var(--muted);
       font-size: 0.9rem;
     }
 
@@ -185,9 +239,35 @@
     .resource-links a {
       display: inline-block;
     }
+
+    .upload-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+      margin-top: 0.5rem;
+    }
+
+    .upload-card {
+      border: 1px dashed var(--border);
+      border-radius: 6px;
+      padding: 0.75rem;
+      background: var(--panel);
+    }
+
+    .upload-actions {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
   </style>
 </head>
 <body>
+  <div id="controls">
+    <a id="return" href="/" title="Return to landing">↩️</a>
+    <button id="theme-toggle" onclick="toggleTheme()">Toggle theme</button>
+  </div>
+
   <h1>Admin <span class="build-number" id="build-number">build 251211</span></h1>
 
   <div class="view-tabs">
@@ -235,9 +315,13 @@
         <div id="editor"></div>
       </div>
 
+      <div class="editor-status-line" id="content-editor-status"></div>
+      <div class="editor-status-line" id="caddyfile-editor-status" style="display: none;"></div>
+
       <div class="editor-actions">
         <button onclick="saveCurrentFile()">Save</button>
         <button onclick="downloadCurrentFile()">Download</button>
+        <button onclick="generateFromCaddyfile()">Auto-build from Caddyfile</button>
       </div>
 
       <div id="content-status" class="status" style="display: none;"></div>
@@ -253,6 +337,37 @@
       <button onclick="loadBackupToEditor()">Load into editor</button>
       <button onclick="restoreBackup()">Restore</button>
       <div class="status">Last 10 backups are retained.</div>
+    </div>
+
+    <div class="panel">
+      <h3>Favicon Management</h3>
+      <p class="muted">Upload a replacement for <code>favicon.svg</code> or <code>favicon.ico</code>, or restore the bundled default assets.</p>
+      <div class="upload-grid">
+        <div class="upload-card">
+          <strong>SVG</strong>
+          <div class="upload-actions">
+            <input type="file" id="upload-svg" accept=".svg,image/svg+xml">
+            <button onclick="uploadFavicon('svg')">Upload</button>
+            <button onclick="restoreFavicon('svg')">Restore default</button>
+          </div>
+        </div>
+        <div class="upload-card">
+          <strong>ICO</strong>
+          <div class="upload-actions">
+            <input type="file" id="upload-ico" accept=".ico,image/x-icon">
+            <button onclick="uploadFavicon('ico')">Upload</button>
+            <button onclick="restoreFavicon('ico')">Restore default</button>
+          </div>
+        </div>
+      </div>
+      <div id="favicon-status" class="status" style="display: none;"></div>
+    </div>
+
+    <div class="panel">
+      <h3>Backup</h3>
+      <p class="muted">Download a single archive that includes the active content.json, Caddyfile, favicons, and all available backups.</p>
+      <button onclick="downloadFullBackup()">Download full backup (.tar.gz)</button>
+      <div id="full-backup-status" class="status" style="display: none;"></div>
     </div>
   </div>
 
@@ -294,13 +409,32 @@
   <script>
     let currentFile = 'content.json';
     let currentTab = 'editor';
+    const ADMIN_THEME_KEY = 'adminTheme';
 
     // Initialize editor
     document.addEventListener('DOMContentLoaded', () => {
+      applyTheme(localStorage.getItem(ADMIN_THEME_KEY) || 'dark');
       CaddyEditor.init(document.getElementById('editor'));
       loadAdminInfo();
       switchFile('content.json');
     });
+
+    function applyTheme(theme) {
+      const normalized = theme === 'light' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', normalized);
+      localStorage.setItem(ADMIN_THEME_KEY, normalized);
+
+      const toggle = document.getElementById('theme-toggle');
+      if (toggle) {
+        toggle.textContent = normalized === 'light' ? 'Switch to dark' : 'Switch to light';
+      }
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme');
+      const next = current === 'light' ? 'dark' : 'light';
+      applyTheme(next);
+    }
 
     function switchFile(fileName) {
       currentFile = fileName;
@@ -341,6 +475,36 @@
 
     function downloadCurrentFile() {
       CaddyEditor.downloadFile();
+    }
+
+    function generateFromCaddyfile() {
+      if (currentFile !== 'content.json') {
+        switchFile('content.json');
+      }
+
+      fetch('/api/admin/content/generate')
+        .then(r => {
+          if (!r.ok) throw new Error('Failed');
+          return r.json();
+        })
+        .then(data => {
+          const content = JSON.stringify(data, null, 2);
+          if (window.CaddyEditor && window.CaddyEditor.setContent) {
+            window.CaddyEditor.setContent(content);
+          }
+          const status = document.getElementById('content-status');
+          if (status) {
+            status.textContent = 'Auto-built from Caddyfile. Review then save.';
+            status.style.display = 'block';
+          }
+        })
+        .catch(() => {
+          const status = document.getElementById('content-status');
+          if (status) {
+            status.textContent = 'Unable to generate content from Caddyfile.';
+            status.style.display = 'block';
+          }
+        });
     }
 
     function loadAdminInfo() {
@@ -491,6 +655,104 @@
           status.textContent = "Error restoring backup.";
           status.style.display = 'block';
         });
+    }
+
+    function setFaviconStatus(message) {
+      const el = document.getElementById('favicon-status');
+      if (el) {
+        el.textContent = message;
+        el.style.display = 'block';
+      }
+    }
+
+    async function uploadFavicon(type) {
+      const input = document.getElementById(`upload-${type}`);
+      const statusTarget = document.getElementById('favicon-status');
+      if (statusTarget) statusTarget.style.display = 'none';
+
+      if (!input || !input.files || !input.files[0]) {
+        setFaviconStatus('Select a file first.');
+        return;
+      }
+
+      const file = input.files[0];
+      if (type === 'svg' && !file.name.toLowerCase().endsWith('.svg')) {
+        setFaviconStatus('Only .svg files are allowed for SVG uploads.');
+        return;
+      }
+      if (type === 'ico' && !file.name.toLowerCase().endsWith('.ico')) {
+        setFaviconStatus('Only .ico files are allowed for ICO uploads.');
+        return;
+      }
+
+      try {
+        const body = await file.arrayBuffer();
+        const response = await fetch(`/api/admin/favicon?type=${encodeURIComponent(type)}`, {
+          method: 'POST',
+          body
+        });
+
+        if (!response.ok) {
+          throw new Error('Upload failed');
+        }
+
+        setFaviconStatus(`Uploaded favicon.${type}.`);
+        input.value = '';
+      } catch (err) {
+        console.error(err);
+        setFaviconStatus('Upload failed. Confirm the file type and try again.');
+      }
+    }
+
+    async function restoreFavicon(type) {
+      const statusTarget = document.getElementById('favicon-status');
+      if (statusTarget) statusTarget.style.display = 'none';
+      try {
+        const response = await fetch(`/api/admin/favicon/restore?type=${encodeURIComponent(type)}`, { method: 'POST' });
+        if (!response.ok) throw new Error('Restore failed');
+        setFaviconStatus(`Restored default favicon.${type}.`);
+      } catch (err) {
+        console.error(err);
+        setFaviconStatus('Restore failed.');
+      }
+    }
+
+    async function downloadFullBackup() {
+      const status = document.getElementById('full-backup-status');
+      if (status) {
+        status.textContent = '';
+        status.style.display = 'none';
+      }
+
+      try {
+        const response = await fetch('/api/admin/full-backup');
+        if (!response.ok) throw new Error('Failed');
+
+        const blob = await response.blob();
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
+        const filename = filenameMatch?.[1] || 'caddylander-backup.tar.gz';
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        if (status) {
+          status.textContent = 'Backup generated and download started.';
+          status.style.display = 'block';
+        }
+      } catch (err) {
+        console.error(err);
+        if (status) {
+          status.textContent = 'Unable to create backup. Please try again.';
+          status.style.display = 'block';
+        }
+      }
     }
   </script>
 </body>
