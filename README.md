@@ -5,7 +5,7 @@
 [![GitHub Stars](https://img.shields.io/github/stars/mythosaz/caddyLander?style=flat)](https://github.com/mythosaz/caddyLander/stargazers)
 ![Image Size](https://img.shields.io/docker/image-size/mythosaz/caddylander/main)
 
-<pre>
+```
                        █████     █████            █████                                █████                   
                        ░░███     ░░███            ░░███                                ░░███                    
   ██████   ██████    ███████   ███████  █████ ████ ░███         ██████   ████████    ███████   ██████  ████████ 
@@ -17,7 +17,7 @@
                                          ███ ░███                                                               
                                         ░░██████                                                                
                                          ░░░░░░                                                                 
-</pre>
+```
 
 **caddyLander** is a web-based Caddyfile editor and landing page generator that shares volumes with your Caddy container. You edit your Caddyfile in a browser, it validates before saving, and you get a simple service dashboard as a bonus.
 
