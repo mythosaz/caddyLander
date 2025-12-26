@@ -14,4 +14,5 @@
                                          ░░░░░░         
 </pre>
 
-1. Nothing.
+1. Sunset JSON-based landing content in favor of a Markdown reader (consider integrating marked.js).
+2. Build a converter that translates existing caddyLander-formatted content.json files into Markdown.
