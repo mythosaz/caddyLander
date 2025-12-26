@@ -37,7 +37,12 @@
       align-items: center;
     }
 
-    #theme-toggle {
+    #controls .theme-options {
+      display: flex;
+      gap: 0.25rem;
+    }
+
+    .theme-options button {
       padding: 0.35rem 0.6rem;
       background: transparent;
       border: 1px solid var(--border-color);
@@ -46,8 +51,9 @@
       cursor: pointer;
     }
 
-    #theme-toggle:hover {
+    .theme-options button.active {
       background: var(--border-color);
+      border-color: var(--link-color);
     }
 
     .item {
@@ -99,7 +105,11 @@
 <body>
   <div id="controls">
     <a id="admin" href="/admin">🔒</a>
-    <button id="theme-toggle" onclick="cycleTheme()">Toggle</button>
+    <div class="theme-options">
+      <button id="theme-auto" onclick="setTheme('auto')">Auto</button>
+      <button id="theme-light" onclick="setTheme('light')">Light</button>
+      <button id="theme-dark" onclick="setTheme('dark')">Dark</button>
+    </div>
   </div>
 
   <h1 id="site-title">Services</h1>
@@ -107,45 +117,64 @@
   <div id="content"></div>
 
   <script>
-    const LANDING_THEME_KEY = 'landingTheme';
+    const THEME_KEY = 'caddyLanderTheme';
+    const LEGACY_KEYS = ['landingTheme', 'adminTheme'];
     const mediaQuery = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)');
 
     if (mediaQuery && mediaQuery.addEventListener) {
       mediaQuery.addEventListener('change', () => {
-        if ((localStorage.getItem(LANDING_THEME_KEY) || 'auto') === 'auto') {
+        if ((localStorage.getItem(THEME_KEY) || 'auto') === 'auto') {
           applyThemePreference('auto');
         }
       });
     }
 
     function applyThemePreference(preference) {
-      const stored = preference || localStorage.getItem(LANDING_THEME_KEY) || 'auto';
+      const stored = preference || localStorage.getItem(THEME_KEY) || resolveInitialTheme();
       const resolved = stored === 'auto'
         ? (mediaQuery && mediaQuery.matches ? 'light' : 'dark')
         : stored;
 
       document.documentElement.setAttribute('data-theme', resolved === 'light' ? 'light' : 'dark');
-      localStorage.setItem(LANDING_THEME_KEY, stored);
+      localStorage.setItem(THEME_KEY, stored);
+      updateThemeButtons(stored);
+    }
 
-      const button = document.getElementById('theme-toggle');
-      if (button) {
-        const label = stored === 'auto' ? 'Auto' : (resolved === 'light' ? 'Light' : 'Dark');
-        button.textContent = `Theme: ${label}`;
+    function resolveInitialTheme() {
+      const existing = localStorage.getItem(THEME_KEY);
+      if (existing) return existing;
+
+      for (const legacy of LEGACY_KEYS) {
+        const legacyValue = localStorage.getItem(legacy);
+        if (legacyValue) {
+          localStorage.setItem(THEME_KEY, legacyValue);
+          return legacyValue;
+        }
       }
+
+      localStorage.setItem(THEME_KEY, 'auto');
+      return 'auto';
     }
 
-    function cycleTheme() {
-      const current = localStorage.getItem(LANDING_THEME_KEY) || 'auto';
-      const next = current === 'dark' ? 'light' : current === 'light' ? 'auto' : 'dark';
-      applyThemePreference(next);
+    function setTheme(value) {
+      applyThemePreference(value);
     }
 
-    applyThemePreference(localStorage.getItem(LANDING_THEME_KEY) || 'auto');
+    function updateThemeButtons(active) {
+      ['auto', 'light', 'dark'].forEach(option => {
+        const btn = document.getElementById(`theme-${option}`);
+        if (btn) {
+          btn.classList.toggle('active', active === option);
+        }
+      });
+    }
+
+    applyThemePreference(resolveInitialTheme());
 
     fetch("/api/content")
       .then(r => r.json())
       .then(data => {
-        const preferredTheme = localStorage.getItem(LANDING_THEME_KEY) || data.theme || 'dark';
+        const preferredTheme = localStorage.getItem(THEME_KEY) || data.theme || 'auto';
         applyThemePreference(preferredTheme);
 
         // Apply site title

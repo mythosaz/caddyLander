@@ -57,6 +57,11 @@
       z-index: 10;
     }
 
+    #controls .theme-options {
+      display: flex;
+      gap: 0.25rem;
+    }
+
     a {
       color: var(--link-color);
       text-decoration: none;
@@ -265,7 +270,11 @@
 <body>
   <div id="controls">
     <a id="return" href="/" title="Return to landing">↩️</a>
-    <button id="theme-toggle" onclick="toggleTheme()">Toggle theme</button>
+    <div class="theme-options">
+      <button id="theme-auto" onclick="setTheme('auto')">Auto</button>
+      <button id="theme-light" onclick="setTheme('light')">Light</button>
+      <button id="theme-dark" onclick="setTheme('dark')">Dark</button>
+    </div>
   </div>
 
   <h1>Admin <span class="build-number" id="build-number">build 251211</span></h1>
@@ -321,7 +330,7 @@
       <div class="editor-actions">
         <button onclick="saveCurrentFile()">Save</button>
         <button onclick="downloadCurrentFile()">Download</button>
-        <button onclick="generateFromCaddyfile()">Auto-build from Caddyfile</button>
+        <button id="auto-build-btn" onclick="generateFromCaddyfile()">Auto-build from Caddyfile</button>
       </div>
 
       <div id="content-status" class="status" style="display: none;"></div>
@@ -409,31 +418,64 @@
   <script>
     let currentFile = 'content.json';
     let currentTab = 'editor';
-    const ADMIN_THEME_KEY = 'adminTheme';
+    const THEME_KEY = 'caddyLanderTheme';
+    const LEGACY_KEYS = ['adminTheme', 'landingTheme'];
+    const mediaQuery = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)');
 
     // Initialize editor
     document.addEventListener('DOMContentLoaded', () => {
-      applyTheme(localStorage.getItem(ADMIN_THEME_KEY) || 'dark');
+      applyThemePreference(resolveInitialTheme());
       CaddyEditor.init(document.getElementById('editor'));
       loadAdminInfo();
       switchFile('content.json');
     });
 
-    function applyTheme(theme) {
-      const normalized = theme === 'light' ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', normalized);
-      localStorage.setItem(ADMIN_THEME_KEY, normalized);
+    function resolveInitialTheme() {
+      const stored = localStorage.getItem(THEME_KEY);
+      if (stored) return stored;
 
-      const toggle = document.getElementById('theme-toggle');
-      if (toggle) {
-        toggle.textContent = normalized === 'light' ? 'Switch to dark' : 'Switch to light';
+      for (const legacy of LEGACY_KEYS) {
+        const legacyValue = localStorage.getItem(legacy);
+        if (legacyValue) {
+          localStorage.setItem(THEME_KEY, legacyValue);
+          return legacyValue;
+        }
       }
+
+      localStorage.setItem(THEME_KEY, 'auto');
+      return 'auto';
     }
 
-    function toggleTheme() {
-      const current = document.documentElement.getAttribute('data-theme');
-      const next = current === 'light' ? 'dark' : 'light';
-      applyTheme(next);
+    function applyThemePreference(preference) {
+      const stored = preference || localStorage.getItem(THEME_KEY) || 'auto';
+      const resolved = stored === 'auto'
+        ? (mediaQuery && mediaQuery.matches ? 'light' : 'dark')
+        : stored;
+
+      document.documentElement.setAttribute('data-theme', resolved === 'light' ? 'light' : 'dark');
+      localStorage.setItem(THEME_KEY, stored);
+      updateThemeButtons(stored);
+    }
+
+    function updateThemeButtons(active) {
+      ['auto', 'light', 'dark'].forEach(option => {
+        const btn = document.getElementById(`theme-${option}`);
+        if (btn) {
+          btn.classList.toggle('active', active === option);
+        }
+      });
+    }
+
+    function setTheme(value) {
+      applyThemePreference(value);
+    }
+
+    if (mediaQuery && mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', () => {
+        if ((localStorage.getItem(THEME_KEY) || 'auto') === 'auto') {
+          applyThemePreference('auto');
+        }
+      });
     }
 
     function switchFile(fileName) {
@@ -448,6 +490,11 @@
 
       // Update backup title
       document.getElementById('backup-title').textContent = fileName === 'content.json' ? 'Content Backups' : 'Caddyfile Backups';
+
+      const autoBuild = document.getElementById('auto-build-btn');
+      if (autoBuild) {
+        autoBuild.style.display = fileName === 'content.json' ? 'inline-block' : 'none';
+      }
 
       // Hide both status messages
       document.getElementById('content-status').style.display = 'none';
