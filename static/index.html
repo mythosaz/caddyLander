@@ -210,36 +210,56 @@
       });
     }
 
-    function resolveSearchTerm() {
+    function resolveSearchTerm(config = {}) {
       const params = new URLSearchParams(window.location.search);
       const paramTerm = params.get('q') || params.get('term') || '';
       if (paramTerm) {
         return paramTerm.trim();
       }
       const hostname = window.location.hostname || '';
-      const baseDomain = 'stenger.zone';
-      if (hostname === baseDomain) {
+      const baseDomain = config.baseDomain ? config.baseDomain : '';
+      if (baseDomain) {
+        if (hostname === baseDomain) {
+          return '';
+        }
+        if (hostname.endsWith(`.${baseDomain}`)) {
+          const subdomain = hostname.slice(0, -(baseDomain.length + 1));
+          if (!subdomain) return '';
+          return subdomain.split('.')[0];
+        }
         return '';
       }
-      if (hostname.endsWith(`.${baseDomain}`)) {
-        const subdomain = hostname.slice(0, -(baseDomain.length + 1));
-        if (!subdomain) return '';
-        return subdomain.split('.')[0];
+      const parts = hostname.split('.').filter(Boolean);
+      if (parts.length >= 3) {
+        return parts[0];
       }
       return '';
     }
 
-    function applySearchBox(term) {
+    function applySearchBox(term, config) {
       const container = document.getElementById('search-box');
-      if (!container || !term) return;
+      if (!container || !term || !config || !config.enabled) return;
 
+      const action = config.action || 'https://www.google.com/search';
+      const param = config.param || 'q';
+      const label = config.label || 'Search';
+
+      const form = document.getElementById('search-form');
       const input = document.getElementById('search-input');
+      const button = document.querySelector('#search-form button');
       const hint = document.getElementById('search-hint');
+      if (form) {
+        form.action = action;
+      }
       if (input) {
         input.value = term;
+        input.name = param;
+      }
+      if (button) {
+        button.textContent = label;
       }
       if (hint) {
-        hint.textContent = `Search Google for “${term}”.`;
+        hint.textContent = `${label} for “${term}”.`;
       }
       container.hidden = false;
     }
@@ -252,6 +272,9 @@
       .then(data => {
         const preferredTheme = localStorage.getItem(THEME_KEY) || data.theme || 'auto';
         applyThemePreference(preferredTheme);
+
+        const searchConfig = data.searchBox || {};
+        applySearchBox(resolveSearchTerm(searchConfig), searchConfig);
 
         // Apply site title
         if (data.siteTitle) {
