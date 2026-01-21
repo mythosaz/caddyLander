@@ -3,6 +3,13 @@
   "siteSubtitle": "Homelab Dashboard",
   "theme": "auto",
   "favicon": "/static/favicon.ico",
+  "searchBox": {
+    "enabled": false,
+    "label": "Search Google",
+    "action": "https://www.google.com/search",
+    "param": "q",
+    "baseDomain": "example.com"
+  },
   "items": [
     {
       "name": "Example Service",

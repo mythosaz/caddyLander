@@ -37,7 +37,12 @@
       align-items: center;
     }
 
-    #theme-toggle {
+    #controls .theme-options {
+      display: flex;
+      gap: 0.25rem;
+    }
+
+    .theme-options button {
       padding: 0.35rem 0.6rem;
       background: transparent;
       border: 1px solid var(--border-color);
@@ -46,8 +51,9 @@
       cursor: pointer;
     }
 
-    #theme-toggle:hover {
+    .theme-options button.active {
       background: var(--border-color);
+      border-color: var(--link-color);
     }
 
     .item {
@@ -72,6 +78,40 @@
       font-size: 1.2rem;
       margin-top: -0.5rem;
       margin-bottom: 2rem;
+    }
+
+    #search-box {
+      margin: 1.5rem 0 2rem;
+    }
+
+    #search-box form {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    #search-box input[type="text"] {
+      flex: 1 1 260px;
+      padding: 0.6rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: transparent;
+      color: var(--text-color);
+    }
+
+    #search-box button {
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: var(--border-color);
+      color: var(--text-color);
+      cursor: pointer;
+    }
+
+    #search-box small {
+      color: var(--group-color);
+      display: block;
+      margin-top: 0.35rem;
     }
 
     .group-header {
@@ -99,54 +139,142 @@
 <body>
   <div id="controls">
     <a id="admin" href="/admin">🔒</a>
-    <button id="theme-toggle" onclick="cycleTheme()">Toggle</button>
+    <div class="theme-options">
+      <button id="theme-auto" onclick="setTheme('auto')">Auto</button>
+      <button id="theme-light" onclick="setTheme('light')">Light</button>
+      <button id="theme-dark" onclick="setTheme('dark')">Dark</button>
+    </div>
   </div>
 
   <h1 id="site-title">Services</h1>
   <div id="site-subtitle" class="subtitle"></div>
+  <div id="search-box" hidden>
+    <form id="search-form" action="https://www.google.com/search" method="get">
+      <input id="search-input" type="text" name="q" aria-label="Google search" />
+      <button type="submit">Search Google</button>
+    </form>
+    <small id="search-hint"></small>
+  </div>
   <div id="content"></div>
 
   <script>
-    const LANDING_THEME_KEY = 'landingTheme';
+    const THEME_KEY = 'caddyLanderTheme';
+    const LEGACY_KEYS = ['landingTheme', 'adminTheme'];
     const mediaQuery = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)');
 
     if (mediaQuery && mediaQuery.addEventListener) {
       mediaQuery.addEventListener('change', () => {
-        if ((localStorage.getItem(LANDING_THEME_KEY) || 'auto') === 'auto') {
+        if ((localStorage.getItem(THEME_KEY) || 'auto') === 'auto') {
           applyThemePreference('auto');
         }
       });
     }
 
     function applyThemePreference(preference) {
-      const stored = preference || localStorage.getItem(LANDING_THEME_KEY) || 'auto';
+      const stored = preference || localStorage.getItem(THEME_KEY) || resolveInitialTheme();
       const resolved = stored === 'auto'
         ? (mediaQuery && mediaQuery.matches ? 'light' : 'dark')
         : stored;
 
       document.documentElement.setAttribute('data-theme', resolved === 'light' ? 'light' : 'dark');
-      localStorage.setItem(LANDING_THEME_KEY, stored);
+      localStorage.setItem(THEME_KEY, stored);
+      updateThemeButtons(stored);
+    }
 
-      const button = document.getElementById('theme-toggle');
-      if (button) {
-        const label = stored === 'auto' ? 'Auto' : (resolved === 'light' ? 'Light' : 'Dark');
-        button.textContent = `Theme: ${label}`;
+    function resolveInitialTheme() {
+      const existing = localStorage.getItem(THEME_KEY);
+      if (existing) return existing;
+
+      for (const legacy of LEGACY_KEYS) {
+        const legacyValue = localStorage.getItem(legacy);
+        if (legacyValue) {
+          localStorage.setItem(THEME_KEY, legacyValue);
+          return legacyValue;
+        }
       }
+
+      localStorage.setItem(THEME_KEY, 'auto');
+      return 'auto';
     }
 
-    function cycleTheme() {
-      const current = localStorage.getItem(LANDING_THEME_KEY) || 'auto';
-      const next = current === 'dark' ? 'light' : current === 'light' ? 'auto' : 'dark';
-      applyThemePreference(next);
+    function setTheme(value) {
+      applyThemePreference(value);
     }
 
-    applyThemePreference(localStorage.getItem(LANDING_THEME_KEY) || 'auto');
+    function updateThemeButtons(active) {
+      ['auto', 'light', 'dark'].forEach(option => {
+        const btn = document.getElementById(`theme-${option}`);
+        if (btn) {
+          btn.classList.toggle('active', active === option);
+        }
+      });
+    }
+
+    function resolveSearchTerm(config = {}) {
+      const params = new URLSearchParams(window.location.search);
+      const paramTerm = params.get('q') || params.get('term') || '';
+      if (paramTerm) {
+        return paramTerm.trim();
+      }
+      const hostname = window.location.hostname || '';
+      const baseDomain = config.baseDomain ? config.baseDomain : '';
+      if (baseDomain) {
+        if (hostname === baseDomain) {
+          return '';
+        }
+        if (hostname.endsWith(`.${baseDomain}`)) {
+          const subdomain = hostname.slice(0, -(baseDomain.length + 1));
+          if (!subdomain) return '';
+          return subdomain.split('.')[0];
+        }
+        return '';
+      }
+      const parts = hostname.split('.').filter(Boolean);
+      if (parts.length >= 3) {
+        return parts[0];
+      }
+      return '';
+    }
+
+    function applySearchBox(term, config) {
+      const container = document.getElementById('search-box');
+      if (!container || !term || !config || !config.enabled) return;
+
+      const action = config.action || 'https://www.google.com/search';
+      const param = config.param || 'q';
+      const label = config.label || 'Search';
+
+      const form = document.getElementById('search-form');
+      const input = document.getElementById('search-input');
+      const button = document.querySelector('#search-form button');
+      const hint = document.getElementById('search-hint');
+      if (form) {
+        form.action = action;
+      }
+      if (input) {
+        input.value = term;
+        input.name = param;
+      }
+      if (button) {
+        button.textContent = label;
+      }
+      if (hint) {
+        hint.textContent = `${label} for “${term}”.`;
+      }
+      container.hidden = false;
+    }
+
+    applyThemePreference(resolveInitialTheme());
+    applySearchBox(resolveSearchTerm());
 
     fetch("/api/content")
       .then(r => r.json())
       .then(data => {
-        const preferredTheme = localStorage.getItem(LANDING_THEME_KEY) || data.theme || 'dark';
+        const preferredTheme = localStorage.getItem(THEME_KEY) || data.theme || 'auto';
         applyThemePreference(preferredTheme);
+
+        const searchConfig = data.searchBox || {};
+        applySearchBox(resolveSearchTerm(searchConfig), searchConfig);
 
         // Apply site title
         if (data.siteTitle) {

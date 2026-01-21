@@ -285,11 +285,17 @@ function setContent(content) {
   });
 }
 
+function getContent() {
+  if (!editorView) return '';
+  return editorView.state.doc.toString();
+}
+
 // Export functions for global access
 window.CaddyEditor = {
   init: initEditor,
   loadFile,
   saveFile,
   downloadFile,
-  setContent
+  setContent,
+  getContent
 };

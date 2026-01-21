@@ -69,6 +69,19 @@ def bootstrap_content() -> None:
         LOGGER.info("Bootstrapped runtime content from template")
 
 
+def _prune_backups(base_dir: Path, glob_pattern: str, keep: int) -> list[Path]:
+    backups = sorted(
+        base_dir.glob(glob_pattern),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+
+    for old_backup in backups[keep:]:
+        old_backup.unlink(missing_ok=True)
+
+    return backups[:keep]
+
+
 def read_body(request_handler: http.server.BaseHTTPRequestHandler) -> bytes:
     length = int(request_handler.headers.get("Content-Length", "0"))
     return request_handler.rfile.read(length)
@@ -464,14 +477,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         backup_path.write_text(previous_content, encoding="utf-8")
 
         LOGGER.info("Created content backup %s", backup_path)
-
-        backups = sorted(
-            CONTENT_BACKUP_DIR.glob("content.json.old.*"),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
-        )
-        for old_backup in backups[10:]:
-            old_backup.unlink(missing_ok=True)
+        _prune_backups(CONTENT_BACKUP_DIR, "content.json.old.*", keep=10)
 
     def _resolve_backup(self, name: str) -> Path | None:
         candidate = (CONTENT_BACKUP_DIR / name).resolve()
@@ -544,11 +550,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "name": path.name,
                 "timestamp": path.stat().st_mtime,
             }
-            for path in sorted(
-                CONTENT_BACKUP_DIR.glob("content.json.old.*"),
-                key=lambda p: p.stat().st_mtime,
-                reverse=True,
-            )[:10]
+            for path in _prune_backups(
+                CONTENT_BACKUP_DIR, "content.json.old.*", keep=10
+            )
         ]
 
         data = json.dumps({"backups": backups}).encode()
@@ -677,14 +681,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         backup_path.write_text(previous_content, encoding="utf-8")
 
         LOGGER.info("Created Caddyfile backup %s", backup_path)
-
-        backups = sorted(
-            BACKUP_DIR.glob("Caddyfile.old.*"),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
-        )
-        for old_backup in backups[10:]:
-            old_backup.unlink(missing_ok=True)
+        _prune_backups(BACKUP_DIR, "Caddyfile.old.*", keep=10)
 
     def _serve_caddyfile_backups(self):
         backups = [
@@ -692,11 +689,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "name": path.name,
                 "timestamp": path.stat().st_mtime,
             }
-            for path in sorted(
-                BACKUP_DIR.glob("Caddyfile.old.*"),
-                key=lambda p: p.stat().st_mtime,
-                reverse=True,
-            )[:10]
+            for path in _prune_backups(BACKUP_DIR, "Caddyfile.old.*", keep=10)
         ]
 
         data = json.dumps({"backups": backups}).encode()
