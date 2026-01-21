@@ -210,14 +210,14 @@
       });
     }
 
-    function resolveSearchTerm(config) {
+    function resolveSearchTerm(config = {}) {
       const params = new URLSearchParams(window.location.search);
       const paramTerm = params.get('q') || params.get('term') || '';
       if (paramTerm) {
         return paramTerm.trim();
       }
       const hostname = window.location.hostname || '';
-      const baseDomain = config && config.baseDomain ? config.baseDomain : '';
+      const baseDomain = config.baseDomain ? config.baseDomain : '';
       if (baseDomain) {
         if (hostname === baseDomain) {
           return '';
