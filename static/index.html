@@ -80,6 +80,40 @@
       margin-bottom: 2rem;
     }
 
+    #search-box {
+      margin: 1.5rem 0 2rem;
+    }
+
+    #search-box form {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    #search-box input[type="text"] {
+      flex: 1 1 260px;
+      padding: 0.6rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: transparent;
+      color: var(--text-color);
+    }
+
+    #search-box button {
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: var(--border-color);
+      color: var(--text-color);
+      cursor: pointer;
+    }
+
+    #search-box small {
+      color: var(--group-color);
+      display: block;
+      margin-top: 0.35rem;
+    }
+
     .group-header {
       font-size: 1.3rem;
       font-weight: bold;
@@ -114,6 +148,13 @@
 
   <h1 id="site-title">Services</h1>
   <div id="site-subtitle" class="subtitle"></div>
+  <div id="search-box" hidden>
+    <form id="search-form" action="https://www.google.com/search" method="get">
+      <input id="search-input" type="text" name="q" aria-label="Google search" />
+      <button type="submit">Search Google</button>
+    </form>
+    <small id="search-hint"></small>
+  </div>
   <div id="content"></div>
 
   <script>
@@ -169,6 +210,60 @@
       });
     }
 
+    function resolveSearchTerm(config) {
+      const params = new URLSearchParams(window.location.search);
+      const paramTerm = params.get('q') || params.get('term') || '';
+      if (paramTerm) {
+        return paramTerm.trim();
+      }
+      const hostname = window.location.hostname || '';
+      const baseDomain = config && config.baseDomain ? config.baseDomain : '';
+      if (baseDomain) {
+        if (hostname === baseDomain) {
+          return '';
+        }
+        if (hostname.endsWith(`.${baseDomain}`)) {
+          const subdomain = hostname.slice(0, -(baseDomain.length + 1));
+          if (!subdomain) return '';
+          return subdomain.split('.')[0];
+        }
+        return '';
+      }
+      const parts = hostname.split('.').filter(Boolean);
+      if (parts.length >= 3) {
+        return parts[0];
+      }
+      return '';
+    }
+
+    function applySearchBox(term, config) {
+      const container = document.getElementById('search-box');
+      if (!container || !term || !config || !config.enabled) return;
+
+      const action = config.action || 'https://www.google.com/search';
+      const param = config.param || 'q';
+      const label = config.label || 'Search';
+
+      const form = document.getElementById('search-form');
+      const input = document.getElementById('search-input');
+      const button = document.querySelector('#search-form button');
+      const hint = document.getElementById('search-hint');
+      if (form) {
+        form.action = action;
+      }
+      if (input) {
+        input.value = term;
+        input.name = param;
+      }
+      if (button) {
+        button.textContent = label;
+      }
+      if (hint) {
+        hint.textContent = `${label} for “${term}”.`;
+      }
+      container.hidden = false;
+    }
+
     applyThemePreference(resolveInitialTheme());
 
     fetch("/api/content")
@@ -176,6 +271,9 @@
       .then(data => {
         const preferredTheme = localStorage.getItem(THEME_KEY) || data.theme || 'auto';
         applyThemePreference(preferredTheme);
+
+        const searchConfig = data.searchBox || {};
+        applySearchBox(resolveSearchTerm(searchConfig), searchConfig);
 
         // Apply site title
         if (data.siteTitle) {

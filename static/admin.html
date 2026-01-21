@@ -265,6 +265,37 @@
       align-items: center;
       flex-wrap: wrap;
     }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: minmax(160px, 220px) 1fr;
+      gap: 0.75rem 1rem;
+      align-items: center;
+    }
+
+    .form-grid label {
+      font-weight: 600;
+    }
+
+    .form-grid input[type="text"],
+    .form-grid input[type="url"],
+    .form-grid select {
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .form-actions {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-top: 1rem;
+    }
+
+    .form-note {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-top: 0.5rem;
+    }
   </style>
 </head>
 <body>
@@ -306,6 +337,7 @@
             <li><code>siteSubtitle</code> (string) — Subheading/tagline</li>
             <li><code>theme</code> (string) — "light", "dark", or "auto" (system preference)</li>
             <li><code>favicon</code> (string) — Path under /static (e.g., "/static/favicon.ico")</li>
+            <li><code>searchBox</code> (object) — Optional search box configuration</li>
             <li><code>items</code> (array) — Array of link objects</li>
           </ul>
           <p><strong>Link object fields:</strong></p>
@@ -315,6 +347,14 @@
             <li><code>desc</code> (string, optional) — Description text</li>
             <li><code>icon</code> (string, optional) — Emoji or symbol to display</li>
             <li><code>group</code> (string, optional) — Group header for categorization</li>
+          </ul>
+          <p><strong>searchBox fields:</strong></p>
+          <ul>
+            <li><code>enabled</code> (boolean) — Show the search box</li>
+            <li><code>label</code> (string) — Button label</li>
+            <li><code>action</code> (string) — Form action URL</li>
+            <li><code>param</code> (string) — Query parameter name for the search term</li>
+            <li><code>baseDomain</code> (string, optional) — Base domain for subdomain term detection</li>
           </ul>
           <p><em>Note: Schema is backward-compatible. Old files without new fields work fine.</em></p>
         </div>
@@ -335,6 +375,36 @@
 
       <div id="content-status" class="status" style="display: none;"></div>
       <div id="caddyfile-status" class="status" style="display: none;"></div>
+    </div>
+
+    <div class="panel">
+      <h3>Landing Page Search Box</h3>
+      <p class="muted">Enable a search box that auto-fills with the subdomain (or <code>?q=</code> / <code>?term=</code>) for quick lookups.</p>
+      <div class="form-grid">
+        <label for="search-enabled">Enabled</label>
+        <input type="checkbox" id="search-enabled">
+
+        <label for="search-provider">Preset</label>
+        <select id="search-provider"></select>
+
+        <label for="search-label">Button label</label>
+        <input type="text" id="search-label" placeholder="Search Google">
+
+        <label for="search-action">Action URL</label>
+        <input type="url" id="search-action" placeholder="https://www.google.com/search">
+
+        <label for="search-param">Query parameter</label>
+        <input type="text" id="search-param" placeholder="q">
+
+        <label for="search-base-domain">Base domain</label>
+        <input type="text" id="search-base-domain" placeholder="stenger.zone">
+      </div>
+      <div class="form-note" id="search-example"></div>
+      <div class="form-actions">
+        <button type="button" onclick="applySearchBoxConfig()">Apply to editor</button>
+        <button type="button" onclick="syncSearchFormFromEditor()">Reload from editor</button>
+      </div>
+      <div class="status" id="search-config-status" style="display: none;"></div>
     </div>
 
     <div class="panel">
@@ -421,11 +491,54 @@
     const THEME_KEY = 'caddyLanderTheme';
     const LEGACY_KEYS = ['adminTheme', 'landingTheme'];
     const mediaQuery = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)');
+    const SEARCH_PROVIDERS = {
+      google: {
+        label: 'Search Google',
+        action: 'https://www.google.com/search',
+        param: 'q'
+      },
+      duckduckgo: {
+        label: 'Search DuckDuckGo',
+        action: 'https://duckduckgo.com/',
+        param: 'q'
+      },
+      brave: {
+        label: 'Search Brave',
+        action: 'https://search.brave.com/search',
+        param: 'q'
+      },
+      bing: {
+        label: 'Search Bing',
+        action: 'https://www.bing.com/search',
+        param: 'q'
+      },
+      kagi: {
+        label: 'Search Kagi',
+        action: 'https://kagi.com/search',
+        param: 'q'
+      },
+      chatgpt: {
+        label: 'Ask ChatGPT',
+        action: 'https://chat.openai.com/',
+        param: 'q'
+      },
+      claude: {
+        label: 'Ask Claude',
+        action: 'https://claude.ai/new',
+        param: 'q'
+      },
+      custom: {
+        label: '',
+        action: '',
+        param: 'q'
+      }
+    };
 
     // Initialize editor
     document.addEventListener('DOMContentLoaded', () => {
       applyThemePreference(resolveInitialTheme());
       CaddyEditor.init(document.getElementById('editor'));
+      initSearchProviderOptions();
       loadAdminInfo();
       switchFile('content.json');
     });
@@ -478,7 +591,7 @@
       });
     }
 
-    function switchFile(fileName) {
+    async function switchFile(fileName) {
       currentFile = fileName;
 
       // Update button states
@@ -501,7 +614,10 @@
       document.getElementById('caddyfile-status').style.display = 'none';
 
       // Load the file
-      CaddyEditor.loadFile(fileName);
+      await CaddyEditor.loadFile(fileName);
+      if (fileName === 'content.json') {
+        syncSearchFormFromEditor();
+      }
 
       // Refresh backups
       refreshBackups();
@@ -522,6 +638,150 @@
 
     function downloadCurrentFile() {
       CaddyEditor.downloadFile();
+    }
+
+    function initSearchProviderOptions() {
+      const select = document.getElementById('search-provider');
+      if (!select) return;
+      select.innerHTML = '';
+
+      const ordered = [
+        { key: 'google', label: 'Google' },
+        { key: 'duckduckgo', label: 'DuckDuckGo' },
+        { key: 'brave', label: 'Brave Search' },
+        { key: 'bing', label: 'Bing' },
+        { key: 'kagi', label: 'Kagi' },
+        { key: 'chatgpt', label: 'ChatGPT' },
+        { key: 'claude', label: 'Claude' },
+        { key: 'custom', label: 'Custom' }
+      ];
+
+      ordered.forEach(({ key, label }) => {
+        const option = document.createElement('option');
+        option.value = key;
+        option.textContent = label;
+        select.appendChild(option);
+      });
+
+      select.addEventListener('change', () => {
+        const choice = select.value;
+        const defaults = SEARCH_PROVIDERS[choice] || SEARCH_PROVIDERS.custom;
+        applySearchFieldDefaults(defaults);
+        updateSearchExample();
+      });
+
+      ['search-label', 'search-action', 'search-param', 'search-base-domain'].forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+          input.addEventListener('input', updateSearchExample);
+        }
+      });
+    }
+
+    function applySearchFieldDefaults(defaults) {
+      const label = document.getElementById('search-label');
+      const action = document.getElementById('search-action');
+      const param = document.getElementById('search-param');
+      if (label && defaults.label) label.value = defaults.label;
+      if (action && defaults.action) action.value = defaults.action;
+      if (param && defaults.param) param.value = defaults.param;
+    }
+
+    function updateSearchExample() {
+      const example = document.getElementById('search-example');
+      if (!example) return;
+      const action = (document.getElementById('search-action')?.value || '').trim();
+      const param = (document.getElementById('search-param')?.value || 'q').trim();
+      const queryJoin = action.includes('?') ? '&' : '?';
+      if (action) {
+        example.textContent = `Example request: ${action}${queryJoin}${encodeURIComponent(param)}={term}`;
+      } else {
+        example.textContent = '';
+      }
+    }
+
+    function showSearchStatus(message) {
+      const status = document.getElementById('search-config-status');
+      if (!status) return;
+      status.textContent = message;
+      status.style.display = message ? 'block' : 'none';
+    }
+
+    function findMatchingProvider(config) {
+      const entries = Object.entries(SEARCH_PROVIDERS);
+      for (const [key, defaults] of entries) {
+        if (key === 'custom') continue;
+        if (defaults.label === config.label && defaults.action === config.action && defaults.param === config.param) {
+          return key;
+        }
+      }
+      return 'custom';
+    }
+
+    function syncSearchFormFromEditor() {
+      const content = window.CaddyEditor?.getContent ? window.CaddyEditor.getContent() : '';
+      if (!content) return;
+      try {
+        const data = JSON.parse(content);
+        const config = data.searchBox || {};
+        const enabled = Boolean(config.enabled);
+        const provider = findMatchingProvider(config);
+
+        const enabledInput = document.getElementById('search-enabled');
+        const providerSelect = document.getElementById('search-provider');
+        const labelInput = document.getElementById('search-label');
+        const actionInput = document.getElementById('search-action');
+        const paramInput = document.getElementById('search-param');
+        const baseDomainInput = document.getElementById('search-base-domain');
+
+        if (enabledInput) enabledInput.checked = enabled;
+        if (providerSelect) providerSelect.value = provider;
+        if (labelInput) labelInput.value = config.label || SEARCH_PROVIDERS[provider].label || '';
+        if (actionInput) actionInput.value = config.action || SEARCH_PROVIDERS[provider].action || '';
+        if (paramInput) paramInput.value = config.param || SEARCH_PROVIDERS[provider].param || 'q';
+        if (baseDomainInput) baseDomainInput.value = config.baseDomain || '';
+
+        updateSearchExample();
+        showSearchStatus('');
+      } catch (err) {
+        console.error(err);
+        showSearchStatus('Unable to parse editor content. Ensure content.json is valid JSON.');
+      }
+    }
+
+    function applySearchBoxConfig() {
+      const content = window.CaddyEditor?.getContent ? window.CaddyEditor.getContent() : '';
+      if (!content) return;
+
+      try {
+        const data = JSON.parse(content);
+        const enabled = Boolean(document.getElementById('search-enabled')?.checked);
+        const label = (document.getElementById('search-label')?.value || '').trim();
+        const action = (document.getElementById('search-action')?.value || '').trim();
+        const param = (document.getElementById('search-param')?.value || '').trim();
+        const baseDomain = (document.getElementById('search-base-domain')?.value || '').trim();
+
+        if (enabled && (!label || !action || !param)) {
+          showSearchStatus('Provide a label, action URL, and query parameter.');
+          return;
+        }
+
+        data.searchBox = {
+          enabled,
+          label,
+          action,
+          param
+        };
+        if (baseDomain) {
+          data.searchBox.baseDomain = baseDomain;
+        }
+
+        window.CaddyEditor.setContent(JSON.stringify(data, null, 2));
+        showSearchStatus('Search box settings applied. Save content.json to publish.');
+      } catch (err) {
+        console.error(err);
+        showSearchStatus('Unable to parse editor content. Ensure content.json is valid JSON.');
+      }
     }
 
     function generateFromCaddyfile() {
