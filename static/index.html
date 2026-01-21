@@ -265,6 +265,7 @@
     }
 
     applyThemePreference(resolveInitialTheme());
+    applySearchBox(resolveSearchTerm());
 
     fetch("/api/content")
       .then(r => r.json())
